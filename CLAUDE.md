@@ -1,7 +1,7 @@
 # CLAUDE.md — Kundali Studio
 
 Product spec: `docs/BUILD_PROMPT.md` (the source of truth for scope, phases and rules).
-Build status: **Phase 0 (scaffold) done.** Next: Phase 1 (profiles).
+Build status: **v1 complete (Phases 0–5).** Live at https://kundali-studio.askpanchang.workers.dev behind Cloudflare Access.
 
 ## Stack (installed versions)
 
@@ -10,7 +10,7 @@ Build status: **Phase 0 (scaffold) done.** Next: Phase 1 (profiles).
 | Runtime | One Cloudflare Worker + Static Assets (`wrangler.jsonc`, SPA fallback, `run_worker_first: ["/api/*"]`) |
 | Build   | Vite 8 + `@cloudflare/vite-plugin` (dev runs in workerd)                                               |
 | API     | Hono 4, Zod 4 (schemas in `shared/`)                                                                   |
-| DB      | D1, SQL migrations in `migrations/` (Drizzle planned for Phase 1)                                      |
+| DB      | D1, SQL migrations in `migrations/`, plain prepared statements in `worker/db/` (no ORM)                |
 | AI      | Workers AI binding `AI`, model in `AI_MODEL` var                                                       |
 | UI      | React 19, React Router 8 (data router), TanStack Query 5, Tailwind CSS 4, Phosphor icons               |
 | Tests   | Vitest 5 + `@cloudflare/vitest-plugin` (worker project) and jsdom + Testing Library (ui project)       |
@@ -30,17 +30,38 @@ npm run db:migrate:local / db:migrate:remote
 
 ## Layout
 
-- `worker/index.ts` — entry; `worker/app.ts` — `createApp()` builds the Hono app (all routes under `/api`).
+- `worker/index.ts` — entry; `worker/app.ts` — `createApp(deps)` builds the Hono app (all routes under `/api`; `deps` lets tests swap services such as the geocoder). Order: `apiHeaders` (all `/api/*`) → `GET /api/health` (public) → `sameOriginOnly` → 64 KB body limit → `ownerMiddleware` → routes.
+- `worker/lib/security.ts` — `apiHeaders` (nosniff, DENY, referrer policy, `default-src 'none'` CSP, `cache-control: no-store` unless set, `Retry-After` on 429) and `sameOriginOnly` (403 `CROSS_ORIGIN` for non-GET requests with a foreign `Origin` or `Sec-Fetch-Site: cross-site|same-site`).
+- `worker/lib/rateLimit.ts` — `enforceHourlyLimit(db, owner, 'questions'|'kundalis', limit)`: sliding 1 h window counted from existing rows (no extra table); 429 `RATE_LIMITED` with `details.retryAfter`. Limits from `RATE_LIMIT_QUESTIONS_PER_HOUR` (30) / `RATE_LIMIT_KUNDALIS_PER_HOUR` (20); checked before calling upstream.
+- `public/_headers` — CSP and security headers for the SPA shell (Workers applies it to static assets only). `public/theme-init.js` sets the theme before paint (no inline scripts, so CSP `script-src 'self'`).
+- `worker/routes/*` — one Hono sub-app per resource. `worker/db/*` — SQL + row↔API mapping. `worker/services/*` — external APIs.
+- `worker/lib/validate.ts` — `parseJson` / `parseQuery` / `parseValue` throw `VALIDATION_ERROR` (400) with `z.flattenError` details (`{ formErrors, fieldErrors }`).
+- **Roles and sharing.** `isAdminUser(env, ownerId)`: admins = `ADMIN_EMAILS` (comma list, a production **secret**); if empty, everyone is admin in dev and nobody once `ACCESS_AUD` is set (fail closed). Only admins create profiles (403 `ADMIN_ONLY`). A profile owner can share it by email (`profile_shares`, migration 0004): people it's shared with can read the profile and its kundalis and create their own Q&A sessions, but can't edit, delete, regenerate or share (403 `NOT_PROFILE_OWNER`). Sessions belong to their creator (`qa_sessions.owner_id`) and are visible only to them while they can still read the profile, so revoking a share hides their sessions. Question limits count by session owner: admins `RATE_LIMIT_QUESTIONS_PER_HOUR` (30), others `RATE_LIMIT_FAMILY_QUESTIONS_PER_HOUR` (10). DB helpers: `getAccessibleProfile` / `CAN_READ_PROFILE`; route helpers: `requireReadableProfile`, `requireOwnedProfile`, `requireAdmin`.
+- `worker/lib/owner.ts` — sets `c.get('ownerId')` and `c.get('isAdmin')`. With `ACCESS_AUD` set: verifies the Cloudflare Access JWT (`Cf-Access-Jwt-Assertion` header or `CF_Authorization` cookie) with `jose` against `${ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs` (issuer = team domain, audience = `ACCESS_AUD`, RS256); owner = lower-cased `email` claim; 401 `UNAUTHENTICATED` / 403 `FORBIDDEN` (no email, e.g. service token) / 500 `AUTH_MISCONFIGURED` (no team domain). Without `ACCESS_AUD` (dev/tests): `Cf-Access-Authenticated-User-Email` header, else `'default'`. Tests swap keys via `accessKeys.get`. Every query filters by owner (kundalis/sessions via their profile).
+- `worker/lib/hash.ts` — `chartInputHash(profile, options)`: SHA-256 of chart-relevant birth data (not name/notes) + ayanamsa/chart/lang. A kundali is stale when this differs from its stored `input_hash`.
+- `worker/lib/cursor.ts` — opaque keyset cursor over `(created_at DESC, id DESC)`.
+- `worker/services/askpanchang.ts` — `buildKundaliRequest(profile, options)` (unknown time → `12:00`, place sent as `loc`) and `AskPanchangClient` (15 s timeout, one retry on 5xx/network, `KUNDALI_INVALID_INPUT` 422 / `KUNDALI_UPSTREAM_ERROR` 502, optional key in header `ASKPANCHANG_API_KEY_HEADER`). Returns `{ data, raw }`; `raw` is stored verbatim in `kundalis.response_json`. Swappable via `createApp({ kundaliClient })`.
+- `worker/services/chartDigest.ts` — `buildChartDigest({ data, profile, timeUncertain, asOfSec })`: deterministic LLM context (~1.5k tokens for the fixture). Stored at generation time; Phase 3 should rebuild it with `asOfSec = now` per question so "current dasha" and Sade Sati status are right (transits/dosha flags stay as of generation).
+- `shared/astro.ts` + `shared/astroLabels.generated.ts` — code → label maps. The generated file comes from `GET /api/v1/dict?lang=en` (v2026.7); `/api/v1/dict?lang=hi|te` has Hindi/Telugu labels if needed.
+- `shared/dasha.ts` — `currentDasha(data, atSec)` (MD/AD from the API, PD computed with `subPeriods`), verified against the API's `dasha_now`. `shared/chartModel.ts` — `toChartHouses(data, 'D1'|'D9'|…)` normalized chart for `ChartNorth`/`ChartSouth`.
+- `worker/services/llm.ts` — `LlmClient` interface; `WorkersAiLlm` (chat-completions input: `messages`, `max_tokens` 4096, `temperature`, `reasoning_effort`, `stream_options.include_usage`; optional AI Gateway via `AI_GATEWAY_ID`); `parseModelStream` reads OpenAI `choices[].delta.content` chunks (reasoning ignored) and legacy `{ response }` chunks; `DevEchoLlm` when `AI_MODEL=dev:echo`.
+- `worker/services/prompts.ts` — `systemPrompt(lang)`, `buildPrompt(...)` (single system message = rules + CHART DATA + today + time-uncertain flag; history trimmed oldest-first to 12k est. tokens), `PROMPT_VERSION` (stored on each answer; bump when prompts change).
+- `worker/routes/sessions.ts` — sessions CRUD and `POST /api/sessions/:id/messages` (SSE). The digest is rebuilt per question from the session's pinned kundali (`request_json` birth data, not the possibly-edited profile) with `asOfSec = now`.
+- `shared/sse.ts` — `SseParser` / `sseEvent`, used by both the Worker (model stream) and the browser (answer stream).
+- `worker/services/geocoder.ts` — `Geocoder` interface + `OpenMeteoGeocoder`. `/api/geocode` caches results 24 h in the Cache API (`caches.open('geocode')`).
 - `worker/lib/errors.ts` — `AppError(status, code, message, details?)`; thrown anywhere, rendered by `app.onError` as `{ error: { code, message, details? } }`.
 - `worker/env.d.ts` — secrets missing from `wrangler types` (`ASKPANCHANG_API_KEY`) and `GlobalProps.mainModule` (types `exports.default` in tests).
 - `shared/` — zod schemas + types used by both sides. `shared/app.ts` holds `APP_NAME`.
 - `src/api/client.ts` — `apiFetch(path, schema, init)`; throws `ApiRequestError` with the API error code.
 - `src/routes.tsx` — route table (used by `createBrowserRouter` in the app and `createMemoryRouter` in tests).
 - `src/styles/index.css` — design tokens as CSS variables on `:root` / `.dark`, mapped to Tailwind colours via `@theme inline` (`bg-surface`, `text-saffron`, …).
-- `test/worker/*.test.ts` — run inside workerd; call the Worker with `exports.default.fetch()` from `cloudflare:workers`.
-- `test/ui/*.test.tsx` — jsdom; stub `fetch` with `vi.stubGlobal`.
+- `src/pages/*` — ProfilesListPage, ProfileFormPage (new + edit), ProfileDetailPage (tabs via `?tab=`), SessionPage (`/sessions/:id`: chat, starter chips, Stop, copy, rename, language, chart side panel / mobile bottom sheet). `src/api/sessions.ts` — hooks + `streamAnswer()`; `useSession` polls every 1 s while a stored answer is still `streaming`. `src/components/*` — ui primitives (`Button`, `inputClass`, `Spinner`, `ErrorState`, `EmptyState`), `ToastProvider`/`useToast`, `ConfirmDialog` (native `<dialog>`), `PlaceAutocomplete` (ARIA combobox).
+- `test/worker/*.test.ts` — run inside workerd; migrations applied in `test/worker/setup.ts`. Use `api(path, { owner, json })` from `helpers.ts`, and `freshOwner()` per test (storage is shared across tests in a file). Mock outbound HTTP with `vi.spyOn(globalThis, 'fetch')`.
+- `test/ui/*.test.tsx` — jsdom. `renderApp(path)` + `mockApi({ 'GET /api/x': handler })` from `renderApp.tsx`.
 
 ## Conventions
+
+- **Run automated tests sparingly** (owner's instruction). Don't re-run the suite after every edit; run the relevant tests once a feature is complete, and `npm run check` once before each commit. Prefer typecheck/lint for quick feedback.
 
 - Every API route validates input with zod and returns the standard error shape; throw `AppError` rather than building responses by hand.
 - Never log request bodies, birth data or chat content. Log IDs and error codes only.
@@ -48,14 +69,64 @@ npm run db:migrate:local / db:migrate:remote
 - `matchMedia` and `localStorage` may be missing (jsdom, private mode): guard them.
 - Strict TS with `noUncheckedIndexedAccess`; `verbatimModuleSyntax` → use `import type` for types.
 
+## API (implemented so far)
+
+`GET /api/health` · `GET|POST /api/profiles` (list: `q`, `cursor`, `limit` ≤ 50 → `{ items, nextCursor }`; items carry `kundaliStatus` none/current/stale and `lastSessionAt`) · `GET|PATCH|DELETE /api/profiles/:id` (detail → `{ profile, latestKundali }`; PATCH re-validates the merged row; DELETE is soft and returns `{ ok: true }`) · `GET /api/geocode?q=&lang=` · `POST /api/profiles/:id/kundali` (body optional: `{ ayanamsa: lahiri|raman, chartStyle: north|south, lang: en|hi|te }` → 201 `{ kundali }`) · `GET /api/profiles/:id/kundali` (versions, newest first, each with `stale`, `timeUncertain`) · `GET /api/kundali/:id` (`{ kundali: { …version, data, digest } }`).
+
+`GET /api/me` (`{ email, isAdmin }`) · `GET|POST /api/profiles/:id/shares` (owner only; POST `{ email }` → 201 `{ items }`) · `DELETE /api/profiles/:id/shares/:email`. Profile list items and detail carry `access: owner|shared` and `sharedBy`; `lastSessionAt` is the caller's own activity.
+
+`GET|POST /api/profiles/:id/sessions` (POST body optional `{ lang }`; 409 `NO_KUNDALI`; pins the latest kundali; lang defaults to the kundali's) · `GET|PATCH|DELETE /api/sessions/:id` (GET → `{ session, messages, kundaliOutdated }`; PATCH `{ title?, lang? }`) · `POST /api/sessions/:id/messages` `{ question }` (1–2000 chars; 409 `ANSWER_IN_PROGRESS`) → `text/event-stream` with events `start` `{ userMessageId, messageId }`, `token` `{ text }`, `done` `{ messageId, tokensIn, tokensOut }`, `error` `{ code, message }`.
+
+Streaming rules: the answer is generated inside `waitUntil` and always saved. Client disconnect / Stop → model stream cancelled, partial text saved as `complete` with "_(Answer stopped before it finished.)_" (or `error` if empty). Model failure → `error` with partial text kept. Session title = first question, ≤ 6 words (heuristic, no extra model call).
+
+UI routes: `/profiles/:id` (Kundali tab = latest version), `/profiles/:id/kundali/:kid` (a specific version), `/sessions/:id`.
+
+Profile rules: `tobUnknown` ⇒ `tob` stored as NULL; otherwise `tob` required (HH:MM). DOB must be a real date between 1800 and "today" in UTC+14. `tz` must be a valid IANA zone.
+
+## AskPanchang Kundali API (discovered Phase 2)
+
+- `POST /api/v1/kundali/generate`, body `{ bd: { nm, g, dob, tob, tz, lat, lon, loc }, opt: { ayan, chart, lang, div? } }`. No auth today. OpenAPI at `/openapi.json` (response schema undocumented); code dictionary at `/api/v1/dict`.
+- Response (fixture: `test/fixtures/askpanchang-sample.json`, ~36 KB): `info` (lagna/rashi/n/pd are sign/nakshatra codes, asc_deg/min, ayan_val, `dt` Unix), `dasha_now` (md/ad/pd/sd/prd planet codes), `charts` (D1–D60, CHALIT, MOON, SUN: 12 × `{ h, r, p[], asc? }`), `pl` (per planet: p, r, deg, min, n, pd, h, dig, rx, cmb, sl, nl, r9 = D9 sign, fl[]), `houses` (h, r, lord, lh, p[], sav), `aspects` (a → b, typ = aspect number), `dosha`/`yogas` (id, val|q, txt), `dasha` (md, from, to Unix s, ad[]), `yogini`, `shadbala` (ratio = rupas/required), `birth` (panchang codes), `readings` (texts), `karakas`, `avak`, `ashtak`, `rel`, `upagrahas`, `ss` (Sade Sati/Panoti windows), `transits`, `ins`.
+- Codes: planets 1 Sun … 7 Saturn, 8 Rahu, 9 Ketu; signs 1 Aries … 12 Pisces; nakshatras 1–27; dignity 0 neutral, 1 own, 2 exalted, 3 debilitated, 4 friendly, 5 enemy, 6 mooltrikona.
+- **Only `lahiri` and `raman` ayanamsas work**; any other name silently falls back to Lahiri, so the app allow-lists them. `chart` and `lang` don't change the response (readings stay English); we store `chartStyle` as the default rendering and `lang` as the default Q&A answer language.
+- Invalid input (bad date, lat 999) returns a plain-text **500**, not 422, so validate before calling.
+- Response parsing is lenient (`z.looseObject`); only info, charts, pl, houses and dasha are required.
+
+## Production
+
+- Account: askpanchang@gmail.com (Workers **Free** plan). Worker `kundali-studio` on `kundali-studio.askpanchang.workers.dev` (`preview_urls: false`).
+- D1 `kundali-studio`, id `fd888024-a97c-47d0-b25d-73333b057d74`, location APAC (users are in India; location is fixed at creation).
+- Secrets on the Worker: `ACCESS_AUD`, `ADMIN_EMAILS` (= askpanchang@gmail.com).
+- Access: Zero Trust team `ask-panchang` (`https://ask-panchang.cloudflareaccess.com`), self-hosted app "Kundali Studio" (id `77fbfba6-4dbb-405a-94ee-e5ee9b7a197f`) with policy "Allowed operators" = askpanchang@gmail.com, session 24 h. `ACCESS_AUD` is a **Worker secret** (not a var, so local dev stays login-free); `ACCESS_TEAM_DOMAIN` is a var.
+- Login methods: only the Cloudflare-account login (account members) is configured. Adding someone outside the account needs a login method such as One-time PIN, added in Zero Trust → Settings → Authentication; the deploy token can't change that.
+- Deploys: `.github/workflows/deploy.yml` (checks on PRs; on main: migrations → deploy → smoke check that `/` is 302 to Access). Uses the repo's pinned Wrangler via `npx`, and repository secrets `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`.
+- Other Workers, D1 databases and an Access app (staging-api) in this account belong to other projects: don't touch them.
+
 ## Decisions and gotchas
 
 - **`@cloudflare/vitest-pool-workers` is deprecated** → use `@cloudflare/vitest-plugin` (`cloudflareTest()` Vite plugin in `vitest.config.ts`). Tests run with `remoteBindings: false`.
 - **npm 10.9 crashes** (`Cannot read properties of null (reading 'edgesOut')`) when resolving the tree from scratch. Use `npx npm@11 install <pkg>` to add deps; `npm ci` with npm 10 works from the lockfile. npm 11 blocks install scripts unless approved: `allowScripts` in package.json lists esbuild and workerd (run `npx npm@11 install-scripts approve esbuild workerd` after upgrades that bump their versions).
+- **No ORM:** plain D1 prepared statements; SQL migrations are the schema source of truth (BUILD_PROMPT allows this; Drizzle would duplicate the schema).
+- **Production must set `ACCESS_AUD` and `ACCESS_TEAM_DOMAIN`.** Without them the Worker trusts the email header, which is only safe locally. (Cloudflare also offers `ctx.access` for Workers behind Access; we use explicit JWT verification as the spec asks, and because it is testable.)
+- Light-theme `--saffron` is `#a84f00` and `--amber` `#92400e` to pass WCAG AA (white on saffron 5.55:1). axe-core (wcag2a/aa, 21aa, best-practice) reports no violations on list, form, kundali and session pages in both themes.
+- Routes `profiles/:id`, `profiles/:id/kundali/:kid` and `sessions/:id` are lazy (`route.lazy`), so charts and Markdown load on demand.
+- Hardening tests call `createApp().fetch(req, { ...env, ...overrides }, ctx)` to set vars per test. For streaming responses, read the body **before** `waitOnExecutionContext`, or it deadlocks.
+- `kundalis.time_uncertain` (migration 0002) records unknown-time charts; the request payload can't distinguish them from a real noon birth.
+- **workerd can't use the sandbox's HTTPS proxy** (it does its own DNS), so in the cloud build sandbox the local Worker can't reach AskPanchang/Open-Meteo. For manual testing there, run a Node relay (Node honours the proxy with `NODE_USE_ENV_PROXY=1`) and point `ASKPANCHANG_API_BASE` at it via `.dev.vars`. Not needed on a normal machine or in production. Tests read `.dev.vars` too, so assert against `env.ASKPANCHANG_API_BASE`, not a literal URL.
+- React Compiler lint (`react-hooks/purity`) forbids `Date.now()` in render; use `useNowSec()`.
+- Migration 0003 adds `qa_messages.prompt_version` and `qa_sessions.lang`.
+- Zod skips object-level `superRefine` while field errors exist, so the form adds the "time required" error itself (`ProfileFormPage.validateProfileForm`).
+- Playwright: don't `page.route('**/api/geocode**')` — it also matches Vite's `/src/api/geocode.ts` module. Use a regex like `/\/api\/geocode\?/`.
 - `wrangler types --strict-vars=false` so vars are typed as `string`, not literals.
 - **D1 `database_id`** in `wrangler.jsonc` is a zero-UUID placeholder until the remote DB is created (Phase 5).
-- **AI model (provisional):** `@cf/openai/gpt-oss-120b`. Third-party listings show ~128k context, streaming, tool calling. **Not yet verified** against developers.cloudflare.com (blocked from the build sandbox). Verify the input schema (`messages` vs `input`/Responses API) before Phase 3.
+- **AI model: `@cf/openai/gpt-oss-120b`** (checked against the Workers AI catalog, Nov 2026): 128k context, streaming, reasoning (low/medium/high), $0.35 / $0.75 per M tokens, available without the Workers Paid plan. Alternatives if Hindi/Telugu quality disappoints: `@cf/deepseek-ai/deepseek-v4.1-flash-1017` (1M ctx) or `@cf/moonshotai/kimi-k2.6` (262k), both Paid-plan only and pricier. Input/output types confirmed from `worker-configuration.d.ts` (`Base_Ai_Cf_Openai_Gpt_Oss_120B`: chat-completions or Responses input; Responses API is non-streaming only, so we use chat-completions). Live-tested (Nov 2026) through the REST API with the real prompt: the stream is OpenAI `chat.completion.chunk` (`delta.content`; reasoning in `delta.reasoning` / `reasoning_content`, ignored), and `usage` arrives on most chunks (sometimes zeros) and again in a final `{ response: "", usage }` chunk, so we keep the max. English answers are well grounded; the off-topic refusal works. Paid-plan models (DeepSeek, Kimi) return 403 on this Free-plan account.
+- **Temperature 1.0** (OpenAI's recommendation for gpt-oss). At 0.4 a Hindi health question looped ("Mah Mah …"), leaked the chat template (`<|end|><|start|>assistantfinal`) into content, hit `max_tokens` and answered in English. `findDegeneration()` stops such output mid-stream (502 `AI_MALFORMED_ANSWER`, clean prefix saved as `status=error`).
+- Hindi/Telugu answers are usable but less precise than English (some English transliterations such as जुपिटर, the occasional invented detail). The prompt carries a hi/te glossary of planet and sign names from the AskPanchang dictionary and a rule to check D1 vs D9 columns (`PROMPT_VERSION` 2026-11-03.2). For better Indic quality, upgrade to Workers Paid and set `AI_MODEL` to a larger model, then re-run the spot-check.
+- One system message only: gpt-oss's chat template may drop a second system message.
+- `max_tokens` defaults to 256 on Workers AI and gpt-oss spends part of it on reasoning, so we send 4096.
+- UI tests: `mockApi` answers `GET /api/me` as an admin by default; pass your own handler to test a family member. jsdom gives closed `<dialog>`s no accessible name, so find them by heading text (`dialogWith()` in `profiles.test.tsx`).
+- `.dev.vars` is read by tests too: never leave `AI_MODEL=dev:echo` (or other overrides) there when running `npm test`.
 
 ## Sandbox network notes
 
-The cloud build sandbox reaches npm but **not** `developers.cloudflare.com`, `askpanchang-api-edge.askpanchang.workers.dev` or `geocoding-api.open-meteo.com`. Phase 2 discovery needs the AskPanchang host allowed or a pasted sample response.
+The cloud environment now allows `askpanchang-api-edge.askpanchang.workers.dev`, `developers.cloudflare.com` and `geocoding-api.open-meteo.com` (from shell tools; see the workerd note above for the local Worker).

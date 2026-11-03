@@ -1,0 +1,77 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`chart digest > matches the snapshot for the fixture 1`] = `
+"## BIRTH
+Name: Arjun Sharma | Gender: Male | DOB: 1990-08-15 | TOB: 14:30 local time | Time zone: Asia/Kolkata
+Place: Hyderabad, Telangana, India (17.3850°N, 78.4867°E)
+Zodiac: sidereal | Ayanamsa: Lahiri (Chitrapaksha) (23.7261°) | Nodes: mean | House system: whole sign
+Birth panchang: Wednesday, Krishna Dashami, Vyaghata yoga, Vanija karana, Shravana month, Subhanu samvatsara
+
+## KEY POINTS
+Lagna (ascendant): Scorpio (Vrischika) 26°28′
+Moon sign (rashi): Taurus (Vrishabha) | Janma nakshatra: Rohini pada 4 | Moon in 7th house
+Sun sign: Cancer (Karka) | Sun in 9th house
+Gana Manushya | Nadi Antya | Yoni Sarpa
+Chara karakas (Jaimini): AK Sun, AmK Mars, BK Saturn, MK Mercury, PK Moon, GK Venus, DK Jupiter | Karakamsa: Pisces
+
+## PLANETS (D1)
+planet | sign degree | house | nakshatra-pada (lord) | dignity | flags | D9 sign | shadbala
+Sun | Cancer 28°33′ | H9 | Ashlesha-4 (Mercury) | Friendly | gandanta | Pisces | 1.29× required
+Moon | Taurus 21°18′ | H7 | Rohini-4 (Moon) | Exalted | parivartana | Cancer | 1.33× required
+Mars | Aries 27°35′ | H6 | Krittika-1 (Sun) | Own Sign | — | Sagittarius | 1.37× required
+Mercury | Leo 25°34′ | H10 | Purva Phalguni-4 (Venus) | Friendly | — | Scorpio | 1.08× required
+Jupiter | Cancer 5°39′ | H9 | Pushya-1 (Saturn) | Exalted | — | Leo | 1.19× required
+Venus | Cancer 8°03′ | H9 | Pushya-2 (Saturn) | Enemy | parivartana | Virgo | 1.07× required
+Saturn | Sagittarius 26°08′ | H2 | Purva Ashadha-4 (Venus) | Neutral | retrograde | Scorpio | 1.19× required
+Rahu | Capricorn 12°45′ | H3 | Shravana-1 (Moon) | Friendly | retrograde | Aries | —
+Ketu | Cancer 12°45′ | H9 | Pushya-3 (Saturn) | Neutral | retrograde | Libra | —
+Shadbala ranking (strongest → weakest; Rahu/Ketu not rated): Mars > Moon > Sun > Jupiter > Saturn > Mercury > Venus
+
+## HOUSES (whole sign)
+house | sign | lord → placed in | occupants | SAV bindus
+H1 | Scorpio | Mars → H6 | — | 23
+H2 | Sagittarius | Jupiter → H9 | Saturn | 30
+H3 | Capricorn | Saturn → H2 | Rahu | 29
+H4 | Aquarius | Saturn → H2 | — | 32
+H5 | Pisces | Jupiter → H9 | — | 26
+H6 | Aries | Mars → H6 | Mars | 32
+H7 | Taurus | Venus → H9 | Moon | 35
+H8 | Gemini | Mercury → H10 | — | 27
+H9 | Cancer | Moon → H7 | Sun, Jupiter, Venus, Ketu | 25
+H10 | Leo | Sun → H9 | Mercury | 25
+H11 | Virgo | Mercury → H10 | — | 24
+H12 | Libra | Venus → H9 | — | 29
+
+## GRAHA DRISHTI (planet → planet, aspect number)
+Sun → Rahu (7th); Mars → Sun (4th); Mars → Jupiter (4th); Mars → Venus (4th); Mars → Ketu (4th); Jupiter → Rahu (7th); Venus → Rahu (7th); Rahu → Sun (7th); Rahu → Jupiter (7th); Rahu → Venus (7th); Rahu → Ketu (7th); Ketu → Rahu (7th)
+
+## DIVISIONAL CHARTS
+D9 Navamsa: Lagna Aquarius; Sun Pisces (H2), Rahu Aries (H3), Moon Cancer (H6), Jupiter Leo (H7), Venus Virgo (H8), Ketu Libra (H9), Mercury Scorpio (H10), Saturn Scorpio (H10), Mars Sagittarius (H11)
+D10 Dasamsa: Lagna Pisces; Mercury Aries (H2), Jupiter Aries (H2), Venus Taurus (H3), Ketu Cancer (H5), Moon Leo (H6), Saturn Leo (H6), Sun Sagittarius (H10), Mars Capricorn (H11), Rahu Capricorn (H11)
+
+## VIMSHOTTARI DASHA (as of 2026-11-03)
+Current: Jupiter MD 2017-02-20 → 2033-02-20 / Venus AD 2025-01-03 → 2027-09-04 / Saturn PD 2026-09-20 → 2027-02-21
+Next pratyantardashas: Mercury from 2027-02-21, Ketu from 2027-07-09
+Next antardashas: Jupiter-Sun 2027-09-04 → 2028-06-22; Jupiter-Moon 2028-06-22 → 2029-10-22; Jupiter-Mars 2029-10-22 → 2030-09-28; Jupiter-Rahu 2030-09-28 → 2033-02-20; Saturn-Saturn 2033-02-20 → 2036-02-24
+Mahadasha sequence: Moon 1990-08→1992-02, Mars 1992-02→1999-02, Rahu 1999-02→2017-02, Jupiter 2017-02→2033-02, Saturn 2033-02→2052-02, Mercury 2052-02→2069-02, Ketu 2069-02→2076-02, Venus 2076-02→2096-02, Sun 2096-02→2102-02
+
+## YOGAS (reported by the API)
+- harsha_viparita: The 6th lord, Mars, is in the 6th house. Harsha Yoga, a Viparita Raja Yoga, brings happiness, health and victory over rivals.
+- anapha: Mars in the 12th from the Moon. Anapha Yoga brings good health, good character and renown.
+- amala: Mercury in the 10th from the lagna or Moon. Amala Yoga brings a spotless reputation and lasting fame.
+- vesi: Mercury in the 2nd from the Sun. Vesi Yoga brings truthfulness and steady effort.
+- parivartana: Moon and Venus are in each other's signs. Parivartana Yoga joins the houses they rule and strengthens both.
+- raja: Jupiter and Sun; Jupiter and Venus join kendra and trikona lordship in one sign. Raja Yoga brings status, authority and success.
+
+## DOSHAS (as of chart generation)
+- manglik: PRESENT. Mangal Dosha present from Moon only. Mars is in the 6th from the lagna and the 12th from the Moon. Cancelling factors: Mars in own sign (Aries / Scorpio). Mangal Shanti remedies are traditionally advised, and Manglik st…
+- kaalsarp: absent. No Kaal Sarp Dosha — the nodal axis does not enclose all planets.
+- pitru: PRESENT. The Sun is afflicted by a node or Saturn — perform ancestral (Pitru) propitiation.
+- sade_sati: absent. Saturn is not currently transiting Sade Sati for this Moon sign.
+
+## SATURN CYCLES (Sade Sati / Panoti; status as of 2026-11-03)
+Now: none running | Next Sade Sati phase: rising from 2027-06-02
+
+## SLOW-PLANET TRANSITS (at chart generation; may have moved since)
+Saturn in Pisces (H5 from lagna); Jupiter in Leo (H10 from lagna); Rahu in Aquarius (H4 from lagna)"
+`;

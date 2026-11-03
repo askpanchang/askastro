@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
 import { RouterProvider, createBrowserRouter } from 'react-router';
+import { ToastProvider } from './components/Toaster';
 import { routes } from './routes';
 
 const router = createBrowserRouter(routes);
@@ -11,7 +12,9 @@ export function App() {
   );
   return (
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <ToastProvider>
+        <RouterProvider router={router} />
+      </ToastProvider>
     </QueryClientProvider>
   );
 }

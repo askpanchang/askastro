@@ -1,13 +1,32 @@
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import type { Health } from '../shared/api';
+import type { Me } from '../shared/profile';
 import { AppError, errorBody } from './lib/errors';
+import { ownerMiddleware } from './lib/owner';
+import { apiHeaders, sameOriginOnly } from './lib/security';
+import { geocodeRoutes } from './routes/geocode';
+import { kundaliRoutes } from './routes/kundali';
+import { sessionRoutes } from './routes/sessions';
+import { profiles } from './routes/profiles';
+import { AskPanchangClient, type KundaliClient } from './services/askpanchang';
+import type { Geocoder } from './services/geocoder';
+import { DevEchoLlm, WorkersAiLlm, type LlmClient } from './services/llm';
+import type { AppEnv } from './types';
 
-export type AppEnv = { Bindings: Env };
+export type AppDeps = {
+  geocoder?: Geocoder;
+  kundaliClient?: (env: Env) => KundaliClient;
+  llm?: (env: Env) => LlmClient;
+};
 
-export function createApp() {
+export function createApp(deps: AppDeps = {}) {
   const app = new Hono<AppEnv>();
   const api = new Hono<AppEnv>();
 
+  app.use('/api/*', apiHeaders);
+
+  // Liveness: public (no auth) and reveals nothing beyond up/down.
   api.get('/health', async (c) => {
     let db: 'ok' | 'error' = 'ok';
     try {
@@ -24,6 +43,30 @@ export function createApp() {
     return c.json(body, db === 'ok' ? 200 : 503);
   });
 
+  api.use(sameOriginOnly);
+  api.use(
+    bodyLimit({
+      maxSize: 64 * 1024,
+      onError: (c) => c.json(errorBody('PAYLOAD_TOO_LARGE', 'Request body is too large'), 413),
+    }),
+  );
+  api.use(ownerMiddleware);
+
+  api.get('/me', (c) => {
+    const body: Me = { email: c.get('ownerId'), isAdmin: c.get('isAdmin') };
+    return c.json(body);
+  });
+  api.route('/profiles', profiles);
+  api.route('/geocode', geocodeRoutes(deps.geocoder));
+  api.route('/', kundaliRoutes(deps.kundaliClient ?? ((env) => new AskPanchangClient(env))));
+  api.route(
+    '/',
+    sessionRoutes(
+      deps.llm ??
+        ((env) => (env.AI_MODEL === 'dev:echo' ? new DevEchoLlm() : new WorkersAiLlm(env))),
+    ),
+  );
+
   api.notFound((c) => c.json(errorBody('NOT_FOUND', 'Route not found'), 404));
 
   app.route('/api', api);
@@ -32,7 +75,7 @@ export function createApp() {
     if (err instanceof AppError) {
       return c.json(errorBody(err.code, err.message, err.details), err.status);
     }
-    // Log only the error type/message, never request bodies (personal data).
+    // Log only the error type, never request bodies (personal data).
     console.error('unhandled_error', err instanceof Error ? err.name : 'unknown');
     return c.json(errorBody('INTERNAL_ERROR', 'Something went wrong'), 500);
   });
