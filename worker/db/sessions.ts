@@ -49,8 +49,14 @@ const SESSION_SELECT = `SELECT s.id, s.profile_id, s.kundali_id, s.title, s.mode
   (SELECT COUNT(*) FROM qa_messages m WHERE m.session_id = s.id) AS message_count
   FROM qa_sessions s JOIN profiles p ON p.id = s.profile_id`;
 
-/** Owner-scoped: hidden if the session or its profile is deleted. */
-const VISIBLE = 's.deleted_at IS NULL AND p.deleted_at IS NULL AND p.owner_id = ?';
+/**
+ * A session is visible only to its creator, and only while they can still
+ * read the profile (they own it, or it is still shared with them). Bind the
+ * user id once.
+ */
+const VISIBLE = `s.deleted_at IS NULL AND p.deleted_at IS NULL AND s.owner_id = ?
+  AND (p.owner_id = s.owner_id OR EXISTS (
+    SELECT 1 FROM profile_shares sh WHERE sh.profile_id = p.id AND sh.email = s.owner_id))`;
 
 export async function listSessions(db: D1Database, ownerId: string, profileId: string) {
   const { results } = await db
@@ -73,16 +79,23 @@ export async function getSession(db: D1Database, ownerId: string, id: string) {
 
 export async function insertSession(
   db: D1Database,
-  v: { profileId: string; kundaliId: string; title: string; model: string; lang: string },
+  v: {
+    ownerId: string;
+    profileId: string;
+    kundaliId: string;
+    title: string;
+    model: string;
+    lang: string;
+  },
 ): Promise<string> {
   const id = newId();
   const now = nowIso();
   await db
     .prepare(
-      `INSERT INTO qa_sessions (id, profile_id, kundali_id, title, model, lang, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO qa_sessions (id, owner_id, profile_id, kundali_id, title, model, lang, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .bind(id, v.profileId, v.kundaliId, v.title, v.model, v.lang, now, now)
+    .bind(id, v.ownerId, v.profileId, v.kundaliId, v.title, v.model, v.lang, now, now)
     .run();
   return id;
 }

@@ -52,7 +52,7 @@ describe('kundali tab', () => {
     let generated = false;
     mockApi({
       [`GET /api/profiles/${PROFILE.id}`]: () =>
-        Response.json({ profile: PROFILE, latestKundali: null }),
+        Response.json({ profile: PROFILE, latestKundali: null, access: 'owner', sharedBy: null }),
       [`GET /api/profiles/${PROFILE.id}/kundali`]: () =>
         Response.json({ items: generated ? [version] : [] }),
       [`POST /api/profiles/${PROFILE.id}/kundali`]: (_u, init) => {

@@ -4,10 +4,12 @@ import {
   MagnifyingGlass,
   MapPin,
   Plus,
+  ShareNetwork,
   UsersThree,
 } from '@phosphor-icons/react';
 import { useState } from 'react';
 import { Link } from 'react-router';
+import { useMe } from '../api/me';
 import { useProfiles } from '../api/profiles';
 import { KundaliStatusBadge } from '../components/KundaliStatusBadge';
 import { Button, EmptyState, ErrorState, Spinner, buttonClass, inputClass } from '../components/ui';
@@ -18,16 +20,20 @@ export function ProfilesListPage() {
   const [search, setSearch] = useState('');
   const q = useDebouncedValue(search.trim(), 300);
   const list = useProfiles(q);
+  const me = useMe();
+  const canCreate = me.data?.isAdmin ?? false;
   const items = list.data?.pages.flatMap((p) => p.items) ?? [];
 
   return (
     <section className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-3xl font-bold">Profiles</h1>
-        <Link to="/profiles/new" className={buttonClass('primary')}>
-          <Plus size={16} weight="bold" aria-hidden />
-          New profile
-        </Link>
+        {canCreate && (
+          <Link to="/profiles/new" className={buttonClass('primary')}>
+            <Plus size={16} weight="bold" aria-hidden />
+            New profile
+          </Link>
+        )}
       </div>
 
       <div className="relative max-w-md">
@@ -60,13 +66,22 @@ export function ProfilesListPage() {
           </EmptyState>
         ) : (
           <EmptyState icon={<UsersThree size={40} aria-hidden />} title="No profiles yet">
-            <p className="max-w-sm text-sm text-muted">
-              Add someone's birth details to generate their kundali and ask questions about it.
-            </p>
-            <Link to="/profiles/new" className={buttonClass('primary')}>
-              <Plus size={16} weight="bold" aria-hidden />
-              Create the first profile
-            </Link>
+            {canCreate ? (
+              <>
+                <p className="max-w-sm text-sm text-muted">
+                  Add someone's birth details to generate their kundali and ask questions about it.
+                </p>
+                <Link to="/profiles/new" className={buttonClass('primary')}>
+                  <Plus size={16} weight="bold" aria-hidden />
+                  Create the first profile
+                </Link>
+              </>
+            ) : (
+              <p className="max-w-sm text-sm text-muted">
+                No profiles have been shared with you yet. Ask the app owner to share one with{' '}
+                {me.data?.email ?? 'your email'}.
+              </p>
+            )}
           </EmptyState>
         )
       ) : (
@@ -95,6 +110,13 @@ export function ProfilesListPage() {
                       <MapPin size={14} aria-hidden />
                       <dd className="truncate">{p.place}</dd>
                     </div>
+                    {p.sharedBy && (
+                      <div className="flex items-center gap-2">
+                        <dt className="sr-only">Shared by</dt>
+                        <ShareNetwork size={14} aria-hidden />
+                        <dd className="truncate">Shared by {p.sharedBy}</dd>
+                      </div>
+                    )}
                     {p.lastSessionAt && (
                       <div className="flex items-center gap-2">
                         <dt className="sr-only">Last Q&amp;A</dt>

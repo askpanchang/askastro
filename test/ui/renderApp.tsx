@@ -12,7 +12,12 @@ export function mockApi(table: Record<string, Handler>) {
   const fn = vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
     const url = new URL(String(input), 'http://localhost');
     const method = (init.method ?? 'GET').toUpperCase();
-    const handler = table[`${method} ${url.pathname}`];
+    // Default identity: the admin (override with 'GET /api/me' in the table).
+    const handler =
+      table[`${method} ${url.pathname}`] ??
+      (`${method} ${url.pathname}` === 'GET /api/me'
+        ? () => Response.json({ email: 'admin@example.com', isAdmin: true })
+        : undefined);
     if (!handler) {
       return Response.json({ error: { code: 'NOT_FOUND', message: 'nope' } }, { status: 404 });
     }

@@ -1,10 +1,19 @@
-import { CalendarBlank, Clock, MapPin, PencilSimple, Trash, Warning } from '@phosphor-icons/react';
+import {
+  CalendarBlank,
+  Clock,
+  MapPin,
+  PencilSimple,
+  ShareNetwork,
+  Trash,
+  Warning,
+} from '@phosphor-icons/react';
 import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { GENDER_LABELS, type ProfileDetail } from '../../shared/profile';
 import { useDeleteProfile, useProfile } from '../api/profiles';
 import { BackLink } from '../components/BackLink';
 import { KundaliPanel } from '../components/kundali/KundaliPanel';
+import { ShareDialog } from '../components/ShareDialog';
 import { SessionsPanel } from '../components/qa/SessionsPanel';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useToast } from '../components/Toaster';
@@ -67,7 +76,13 @@ export function ProfileDetailPage() {
       />
 
       <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
-        {tab === 'kundali' && <KundaliPanel profile={profile} kundaliId={kid} />}
+        {tab === 'kundali' && (
+          <KundaliPanel
+            profile={profile}
+            kundaliId={kid}
+            canManage={detail.data.access === 'owner'}
+          />
+        )}
         {tab === 'sessions' && (
           <SessionsPanel profileId={profile.id} latestKundali={latestKundali} />
         )}
@@ -83,6 +98,7 @@ function Header({ data }: { data: ProfileDetail }) {
   const toast = useToast();
   const del = useDeleteProfile();
   const [confirming, setConfirming] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   return (
     <div className="flex flex-wrap items-start justify-between gap-4">
@@ -103,16 +119,32 @@ function Header({ data }: { data: ProfileDetail }) {
           </span>
         </div>
       </div>
-      <div className="flex gap-2">
-        <Link to={`/profiles/${profile.id}/edit`} className={buttonClass('secondary')}>
-          <PencilSimple size={16} aria-hidden />
-          Edit
-        </Link>
-        <Button variant="ghost" onClick={() => setConfirming(true)} aria-label="Delete profile">
-          <Trash size={16} aria-hidden />
-          <span className="hidden sm:inline">Delete</span>
-        </Button>
-      </div>
+      {data.access === 'owner' ? (
+        <div className="flex gap-2">
+          <Link to={`/profiles/${profile.id}/edit`} className={buttonClass('secondary')}>
+            <PencilSimple size={16} aria-hidden />
+            Edit
+          </Link>
+          <Button variant="secondary" onClick={() => setSharing(true)}>
+            <ShareNetwork size={16} aria-hidden />
+            Share
+          </Button>
+          <Button variant="ghost" onClick={() => setConfirming(true)} aria-label="Delete profile">
+            <Trash size={16} aria-hidden />
+            <span className="hidden sm:inline">Delete</span>
+          </Button>
+        </div>
+      ) : (
+        <p className="rounded-full bg-indigo-soft px-3 py-1 text-xs font-semibold text-indigo">
+          Shared with you by {data.sharedBy}
+        </p>
+      )}
+      <ShareDialog
+        profileId={profile.id}
+        profileName={profile.name}
+        open={sharing}
+        onClose={() => setSharing(false)}
+      />
       <ConfirmDialog
         open={confirming}
         title={`Delete ${profile.name}?`}

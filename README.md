@@ -98,13 +98,15 @@ npm run deploy
 
 1. Create the database: `npx wrangler d1 create kundali-studio --location apac` (location can't change later), and put its ID in `wrangler.jsonc`.
 2. In Zero Trust, create a self-hosted Access application for the Worker's hostname, with an Allow policy listing the operators' emails. Turn on a login method (for example One-time PIN) for people outside the Cloudflare account.
-3. Set the application's audience tag as a Worker secret: `npx wrangler secret put ACCESS_AUD`. It is a secret, not a var, so local dev stays login-free. `ACCESS_TEAM_DOMAIN` is a var in `wrangler.jsonc`.
+3. Set the application's audience tag and the admin list as Worker secrets: `npx wrangler secret put ACCESS_AUD` and `npx wrangler secret put ADMIN_EMAILS`. It is a secret, not a var, so local dev stays login-free. `ACCESS_TEAM_DOMAIN` is a var in `wrangler.jsonc`.
 4. Keep `preview_urls: false` in `wrangler.jsonc`: preview hostnames are not covered by the Access application.
 
 ### Workers Builds (alternative)
 
 Connect the repo under Workers & Pages → `kundali-studio` → Settings → Build: build command `npm run build`, deploy command `npx wrangler deploy`. Migrations still need running (add `npx wrangler d1 migrations apply DB --remote` before the deploy command). Use either Workers Builds or the GitHub workflow, not both.
 
-### Adding people
+### Adding people (family)
 
-Zero Trust → Access → Applications → Kundali Studio → Policies → add their email. Each person sees only their own profiles and sessions.
+1. **Let them sign in:** Zero Trust → Settings → Authentication → add **One-time PIN** (once). Then Access → Applications → Kundali Studio → Policies → add their email.
+2. **Share profiles with them:** open a profile → **Share** → enter their email. They can view the profile and kundali and ask their own questions (10 per hour); their Q&A sessions are private to them. They can't edit, regenerate, delete or create profiles. Remove someone from the same dialog.
+3. **Admins** (who can create and share profiles) are listed in the `ADMIN_EMAILS` Worker secret: `npx wrangler secret put ADMIN_EMAILS` with a comma-separated list.

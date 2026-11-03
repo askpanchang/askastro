@@ -7,6 +7,15 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+/** jsdom has no accessible names for closed <dialog>s, so find one by its heading text. */
+function dialogWith(heading: string) {
+  const d = screen
+    .getAllByRole('dialog', { hidden: true })
+    .find((el) => within(el).queryByText(heading));
+  if (!d) throw new Error(`No dialog with "${heading}"`);
+  return d;
+}
+
 const listOf = (items: unknown[], nextCursor: string | null = null) =>
   Response.json({ items, nextCursor });
 
@@ -32,9 +41,22 @@ describe('profiles list', () => {
                 name: 'Meera Iyer',
                 kundaliStatus: 'stale',
                 lastSessionAt: null,
+                access: 'shared',
+                sharedBy: 'owner@example.com',
               },
             ])
-          : listOf([{ ...PROFILE, kundaliStatus: 'current', lastSessionAt: null }], 'c1'),
+          : listOf(
+              [
+                {
+                  ...PROFILE,
+                  kundaliStatus: 'current',
+                  lastSessionAt: null,
+                  access: 'owner',
+                  sharedBy: null,
+                },
+              ],
+              'c1',
+            ),
     });
     renderApp('/');
     const card = await screen.findByRole('link', { name: /Arjun Sharma/ });
@@ -44,7 +66,7 @@ describe('profiles list', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
     expect(await screen.findByText('Meera Iyer')).toBeInTheDocument();
     expect(screen.getByText('Needs regenerating')).toBeInTheDocument();
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls.filter(([u]) => String(u).startsWith('/api/profiles'))).toHaveLength(2);
   });
 
   it('shows an error state with retry', async () => {
@@ -66,7 +88,9 @@ describe('profile form', () => {
     expect(screen.getByText('Enter a valid date')).toBeInTheDocument();
     expect(screen.getByText('Enter the time of birth or mark it unknown')).toBeInTheDocument();
     expect(screen.getByLabelText('Full name')).toHaveAttribute('aria-invalid', 'true');
-    expect(fetch).not.toHaveBeenCalled();
+    expect(
+      fetch.mock.calls.some(([, i]) => (i as RequestInit | undefined)?.method === 'POST'),
+    ).toBe(false);
   });
 
   it('rejects a future date of birth', async () => {
@@ -103,7 +127,7 @@ describe('profile form', () => {
         return Response.json({ profile: PROFILE }, { status: 201 });
       },
       'GET /api/profiles/11111111-1111-4111-8111-111111111111': () =>
-        Response.json({ profile: PROFILE, latestKundali: null }),
+        Response.json({ profile: PROFILE, latestKundali: null, access: 'owner', sharedBy: null }),
     });
     const { router } = renderApp('/profiles/new');
 
@@ -166,6 +190,8 @@ describe('profile detail', () => {
             createdAt: '2026-11-01T10:00:00.000Z',
             stale: true,
           },
+          access: 'owner',
+          sharedBy: null,
         }),
     });
     renderApp(`/profiles/${PROFILE.id}?tab=details`);
@@ -179,7 +205,7 @@ describe('profile detail', () => {
     let deleted = false;
     mockApi({
       [`GET /api/profiles/${PROFILE.id}`]: () =>
-        Response.json({ profile: PROFILE, latestKundali: null }),
+        Response.json({ profile: PROFILE, latestKundali: null, access: 'owner', sharedBy: null }),
       [`DELETE /api/profiles/${PROFILE.id}`]: () => {
         deleted = true;
         return Response.json({ ok: true });
@@ -188,9 +214,67 @@ describe('profile detail', () => {
     });
     const { router } = renderApp(`/profiles/${PROFILE.id}`);
     fireEvent.click(await screen.findByRole('button', { name: 'Delete profile' }));
-    const dialog = screen.getByRole('dialog', { hidden: true });
+    const dialog = dialogWith('Delete Arjun Sharma?');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Delete profile', hidden: true }));
     await waitFor(() => expect(router.state.location.pathname).toBe('/'));
     expect(deleted).toBe(true);
+  });
+});
+
+describe('shared profiles (family member)', () => {
+  const FAMILY = () => Response.json({ email: 'kid@example.com', isAdmin: false });
+
+  it('hides creation for non-admins and explains how to get access', async () => {
+    mockApi({ 'GET /api/me': FAMILY, 'GET /api/profiles': () => listOf([]) });
+    renderApp('/');
+    expect(
+      await screen.findByText(/No profiles have been shared with you yet/),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /New profile/ })).not.toBeInTheDocument();
+  });
+
+  it('shows a shared profile without owner controls', async () => {
+    mockApi({
+      'GET /api/me': FAMILY,
+      [`GET /api/profiles/${PROFILE.id}`]: () =>
+        Response.json({
+          profile: PROFILE,
+          latestKundali: null,
+          access: 'shared',
+          sharedBy: 'owner@example.com',
+        }),
+      [`GET /api/profiles/${PROFILE.id}/kundali`]: () => Response.json({ items: [] }),
+    });
+    renderApp(`/profiles/${PROFILE.id}`);
+    expect(await screen.findByText('Shared with you by owner@example.com')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Edit' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Share' })).not.toBeInTheDocument();
+    expect(await screen.findByText(/The owner hasn't generated/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Generate kundali' })).not.toBeInTheDocument();
+  });
+
+  it('lets the owner share a profile by email', async () => {
+    let shares: { email: string; createdAt: string }[] = [];
+    mockApi({
+      [`GET /api/profiles/${PROFILE.id}`]: () =>
+        Response.json({ profile: PROFILE, latestKundali: null, access: 'owner', sharedBy: null }),
+      [`GET /api/profiles/${PROFILE.id}/kundali`]: () => Response.json({ items: [] }),
+      [`GET /api/profiles/${PROFILE.id}/shares`]: () => Response.json({ items: shares }),
+      [`POST /api/profiles/${PROFILE.id}/shares`]: (_u, init) => {
+        const { email } = JSON.parse(String(init.body)) as { email: string };
+        shares = [{ email, createdAt: '2026-11-03T00:00:00.000Z' }];
+        return Response.json({ items: shares }, { status: 201 });
+      },
+    });
+    renderApp(`/profiles/${PROFILE.id}`);
+    fireEvent.click(await screen.findByRole('button', { name: 'Share' }));
+    const dialog = dialogWith('Share Arjun Sharma');
+    const input = within(dialog).getByLabelText('Email address');
+    fireEvent.change(input, { target: { value: 'not-an-email' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Share', hidden: true }));
+    expect(await within(dialog).findByText('Enter a valid email address')).toBeInTheDocument();
+    fireEvent.change(input, { target: { value: '  Kid@Example.com ' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Share', hidden: true }));
+    expect(await within(dialog).findByText('kid@example.com')).toBeInTheDocument();
   });
 });

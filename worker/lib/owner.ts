@@ -33,11 +33,26 @@ function readToken(header: string | undefined, cookie: string | undefined): stri
  * - ACCESS_AUD unset (local dev and tests): the Cf-Access-Authenticated-User-Email
  *   header is used if present, otherwise everything belongs to 'default'.
  */
+/**
+ * Admins: emails in ADMIN_EMAILS (comma-separated). If it is empty, everyone
+ * is an admin in local dev, and nobody is once Access is on (fail closed).
+ */
+export function isAdminUser(env: Pick<Env, 'ADMIN_EMAILS' | 'ACCESS_AUD'>, ownerId: string) {
+  const admins = (env.ADMIN_EMAILS ?? '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  if (admins.length === 0) return !env.ACCESS_AUD?.trim();
+  return admins.includes(ownerId);
+}
+
 export const ownerMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
   const aud = c.env.ACCESS_AUD?.trim();
   if (!aud) {
     const email = c.req.header('cf-access-authenticated-user-email')?.trim().toLowerCase();
-    c.set('ownerId', email || DEFAULT_OWNER);
+    const ownerId = email || DEFAULT_OWNER;
+    c.set('ownerId', ownerId);
+    c.set('isAdmin', isAdminUser(c.env, ownerId));
     return next();
   }
 
@@ -69,6 +84,8 @@ export const ownerMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
     // e.g. an Access service token: no user identity to own data.
     throw new AppError(403, 'FORBIDDEN', 'A signed-in user is required.');
   }
-  c.set('ownerId', email.trim().toLowerCase());
+  const ownerId = email.trim().toLowerCase();
+  c.set('ownerId', ownerId);
+  c.set('isAdmin', isAdminUser(c.env, ownerId));
   return next();
 };

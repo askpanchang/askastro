@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { KundaliOptionsSchema, type KundaliDetail } from '../../shared/kundali';
-import { getProfile } from '../db/profiles';
+import { getAccessibleProfile } from '../db/profiles';
 import { getKundaliDetail, insertKundali, listKundaliVersions } from '../db/kundalis';
 import { AppError } from '../lib/errors';
 import { isId } from '../lib/ids';
@@ -9,14 +9,14 @@ import { parseValue } from '../lib/validate';
 import { buildKundaliRequest, type KundaliClient } from '../services/askpanchang';
 import { buildChartDigest } from '../services/chartDigest';
 import type { AppEnv } from '../types';
-import { requireProfile } from './profiles';
+import { requireOwnedProfile, requireProfile } from './profiles';
 
 const notFound = () => new AppError(404, 'KUNDALI_NOT_FOUND', 'Kundali not found');
 
 export function kundaliRoutes(clientFor: (env: Env) => KundaliClient) {
   return new Hono<AppEnv>()
     .post('/profiles/:id/kundali', async (c) => {
-      const profile = await requireProfile(c.env.DB, c.get('ownerId'), c.req.param('id'));
+      const profile = await requireOwnedProfile(c.env.DB, c.get('ownerId'), c.req.param('id'));
       // Body is optional: an empty body means "use the defaults".
       const text = await c.req.text();
       let body: unknown = {};
@@ -75,8 +75,11 @@ export function kundaliRoutes(clientFor: (env: Env) => KundaliClient) {
       const id = c.req.param('id');
       if (!isId(id)) throw notFound();
       const ownerId = c.get('ownerId');
-      const kundali = await getKundaliDetail(c.env.DB, id, (pid) =>
-        getProfile(c.env.DB, ownerId, pid),
+      const kundali = await getKundaliDetail(
+        c.env.DB,
+        id,
+        async (pid) =>
+          ((await getAccessibleProfile(c.env.DB, ownerId, pid)) ?? null)?.profile ?? null,
       );
       if (!kundali) throw notFound();
       return c.json({ kundali });

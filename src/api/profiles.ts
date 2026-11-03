@@ -10,6 +10,7 @@ import {
   ProfileDetailSchema,
   ProfileListSchema,
   ProfileResponseSchema,
+  ShareListSchema,
   type ProfileInput,
   type ProfileList,
   type ProfilePatch,
@@ -84,5 +85,39 @@ export function useDeleteProfile() {
       );
       return qc.invalidateQueries({ queryKey: profileKeys.all });
     },
+  });
+}
+
+export const shareKeys = { list: (profileId: string) => ['shares', profileId] as const };
+
+export function useShares(profileId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: shareKeys.list(profileId),
+    enabled,
+    queryFn: ({ signal }) =>
+      apiFetch(`/api/profiles/${profileId}/shares`, ShareListSchema, { signal }),
+  });
+}
+
+export function useAddShare(profileId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (email: string) =>
+      apiFetch(`/api/profiles/${profileId}/shares`, ShareListSchema, {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+      }),
+    onSuccess: (data) => qc.setQueryData(shareKeys.list(profileId), data),
+  });
+}
+
+export function useRemoveShare(profileId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (email: string) =>
+      apiFetch(`/api/profiles/${profileId}/shares/${encodeURIComponent(email)}`, ShareListSchema, {
+        method: 'DELETE',
+      }),
+    onSuccess: (data) => qc.setQueryData(shareKeys.list(profileId), data),
   });
 }

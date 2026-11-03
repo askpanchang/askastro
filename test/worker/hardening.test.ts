@@ -29,6 +29,7 @@ describe('Cloudflare Access verification', () => {
   let otherKey: CryptoKey;
   const realGet = accessKeys.get;
   const access = { ACCESS_AUD: AUD, ACCESS_TEAM_DOMAIN: TEAM };
+  const accessBase = access;
 
   beforeAll(async () => {
     const pair = await generateKeyPair('RS256');
@@ -84,6 +85,8 @@ describe('Cloudflare Access verification', () => {
   it('uses the verified email as owner (header or CF_Authorization cookie)', async () => {
     const email = `Owner-${crypto.randomUUID().slice(0, 6)}@Example.com`;
     const t = await token({ email });
+    // With Access on, only ADMIN_EMAILS may create profiles.
+    const access = { ...accessBase, ADMIN_EMAILS: email.toLowerCase() };
     const created = await call(
       '/api/profiles',
       {

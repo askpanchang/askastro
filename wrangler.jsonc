@@ -36,6 +36,8 @@
     // Per-owner sliding one-hour limits.
     "RATE_LIMIT_QUESTIONS_PER_HOUR": "30",
     "RATE_LIMIT_KUNDALIS_PER_HOUR": "20",
+    // Non-admin (family) users: questions per hour.
+    "RATE_LIMIT_FAMILY_QUESTIONS_PER_HOUR": "10",
   },
   // Served only on kundali-studio.askpanchang.workers.dev, which Cloudflare
   // Access protects. Preview URLs would be extra, unprotected hostnames.

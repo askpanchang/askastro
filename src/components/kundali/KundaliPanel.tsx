@@ -20,7 +20,16 @@ import { PlanetTable } from './PlanetTable';
 import { YogaDoshaList } from './YogaDoshaList';
 
 /** Kundali tab content: generate, view a version, switch versions, regenerate. */
-export function KundaliPanel({ profile, kundaliId }: { profile: Profile; kundaliId?: string }) {
+export function KundaliPanel({
+  profile,
+  kundaliId,
+  canManage = true,
+}: {
+  profile: Profile;
+  kundaliId?: string;
+  /** Owner only: generate and regenerate. People it's shared with just view. */
+  canManage?: boolean;
+}) {
   const navigate = useNavigate();
   const toast = useToast();
   const versions = useKundaliVersions(profile.id);
@@ -46,6 +55,16 @@ export function KundaliPanel({ profile, kundaliId }: { profile: Profile; kundali
   if (versions.isPending) return <Spinner label="Loading kundali…" />;
   if (versions.isError) {
     return <ErrorState message={versions.error.message} onRetry={() => void versions.refetch()} />;
+  }
+
+  if (!latest && !canManage) {
+    return (
+      <EmptyState icon={<Sparkle size={40} aria-hidden />} title="No kundali yet">
+        <p className="max-w-md text-sm text-muted">
+          The owner hasn't generated {profile.name}'s kundali yet.
+        </p>
+      </EmptyState>
+    );
   }
 
   if (!latest) {
@@ -103,10 +122,12 @@ export function KundaliPanel({ profile, kundaliId }: { profile: Profile; kundali
             ))}
           </select>
         </div>
-        <Button variant="secondary" onClick={() => setRegenOpen(true)}>
-          <ArrowsClockwise size={16} aria-hidden />
-          Regenerate
-        </Button>
+        {canManage && (
+          <Button variant="secondary" onClick={() => setRegenOpen(true)}>
+            <ArrowsClockwise size={16} aria-hidden />
+            Regenerate
+          </Button>
+        )}
       </div>
 
       {selectedVersion && selectedVersion.id !== latest.id && (

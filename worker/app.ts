@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import type { Health } from '../shared/api';
+import type { Me } from '../shared/profile';
 import { AppError, errorBody } from './lib/errors';
 import { ownerMiddleware } from './lib/owner';
 import { apiHeaders, sameOriginOnly } from './lib/security';
@@ -51,6 +52,10 @@ export function createApp(deps: AppDeps = {}) {
   );
   api.use(ownerMiddleware);
 
+  api.get('/me', (c) => {
+    const body: Me = { email: c.get('ownerId'), isAdmin: c.get('isAdmin') };
+    return c.json(body);
+  });
   api.route('/profiles', profiles);
   api.route('/geocode', geocodeRoutes(deps.geocoder));
   api.route('/', kundaliRoutes(deps.kundaliClient ?? ((env) => new AskPanchangClient(env))));

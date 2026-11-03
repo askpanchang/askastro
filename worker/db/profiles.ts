@@ -1,4 +1,11 @@
-import type { KundaliSummary, Profile, ProfileListItem, ProfileValues } from '../../shared/profile';
+import type {
+  KundaliSummary,
+  Profile,
+  ProfileAccess,
+  ProfileListItem,
+  ProfileValues,
+  Share,
+} from '../../shared/profile';
 import { chartInputHash } from '../lib/hash';
 import type { Cursor } from '../lib/cursor';
 import { newId, nowIso } from '../lib/ids';
@@ -68,6 +75,69 @@ export async function getProfile(db: D1Database, ownerId: string, id: string) {
   return row ? toProfile(row) : null;
 }
 
+/** SQL: the current user (bound twice) owns the profile or it is shared with them. */
+export const CAN_READ_PROFILE = `(p.owner_id = ? OR EXISTS (
+  SELECT 1 FROM profile_shares sh WHERE sh.profile_id = p.id AND sh.email = ?))`;
+
+export type AccessibleProfile = { profile: Profile; access: ProfileAccess; ownerId: string };
+
+/** A profile the user owns or that is shared with them. */
+export async function getAccessibleProfile(
+  db: D1Database,
+  userId: string,
+  id: string,
+): Promise<AccessibleProfile | null> {
+  const cols = PROFILE_COLS.split(', ')
+    .map((c) => `p.${c}`)
+    .join(', ');
+  const row = await db
+    .prepare(
+      `SELECT ${cols}, p.owner_id FROM profiles p
+       WHERE p.id = ? AND p.deleted_at IS NULL AND ${CAN_READ_PROFILE}`,
+    )
+    .bind(id, userId, userId)
+    .first<ProfileRow & { owner_id: string }>();
+  if (!row) return null;
+  return {
+    profile: toProfile(row),
+    access: row.owner_id === userId ? 'owner' : 'shared',
+    ownerId: row.owner_id,
+  };
+}
+
+export async function listShares(db: D1Database, profileId: string): Promise<Share[]> {
+  const { results } = await db
+    .prepare(
+      'SELECT email, created_at FROM profile_shares WHERE profile_id = ? ORDER BY created_at, email',
+    )
+    .bind(profileId)
+    .all<{ email: string; created_at: string }>();
+  return results.map((r) => ({ email: r.email, createdAt: r.created_at }));
+}
+
+/** Returns false if it was already shared with this email. */
+export async function addShare(
+  db: D1Database,
+  v: { profileId: string; email: string; createdBy: string },
+): Promise<boolean> {
+  const res = await db
+    .prepare(
+      `INSERT INTO profile_shares (profile_id, email, created_by, created_at) VALUES (?, ?, ?, ?)
+       ON CONFLICT (profile_id, email) DO NOTHING`,
+    )
+    .bind(v.profileId, v.email, v.createdBy, nowIso())
+    .run();
+  return res.meta.changes > 0;
+}
+
+export async function removeShare(db: D1Database, profileId: string, email: string) {
+  const res = await db
+    .prepare('DELETE FROM profile_shares WHERE profile_id = ? AND email = ?')
+    .bind(profileId, email)
+    .run();
+  return res.meta.changes > 0;
+}
+
 export async function getLatestKundaliSummary(
   db: D1Database,
   profile: Profile,
@@ -95,8 +165,8 @@ export async function listProfiles(
   ownerId: string,
   opts: { q?: string; cursor: Cursor | null; limit: number },
 ): Promise<{ items: ProfileListItem[]; next: Cursor | null }> {
-  const where = ['p.owner_id = ?', 'p.deleted_at IS NULL'];
-  const binds: unknown[] = [ownerId];
+  const where = [CAN_READ_PROFILE, 'p.deleted_at IS NULL'];
+  const binds: unknown[] = [ownerId, ownerId];
   if (opts.q) {
     where.push(`p.name LIKE ? ESCAPE '\\'`);
     binds.push(`%${opts.q.replace(/[\\%_]/g, (m) => `\\${m}`)}%`);
@@ -110,11 +180,11 @@ export async function listProfiles(
     .join(', ');
   const { results } = await db
     .prepare(
-      `SELECT ${cols},
+      `SELECT ${cols}, p.owner_id,
          k.id AS k_id, k.ayanamsa AS k_ayanamsa, k.chart_style AS k_chart_style,
          k.lang AS k_lang, k.input_hash AS k_input_hash, k.created_at AS k_created_at,
          (SELECT MAX(s.updated_at) FROM qa_sessions s
-            WHERE s.profile_id = p.id AND s.deleted_at IS NULL) AS last_session_at
+            WHERE s.profile_id = p.id AND s.owner_id = ? AND s.deleted_at IS NULL) AS last_session_at
        FROM profiles p
        LEFT JOIN kundalis k ON k.id = (
          SELECT id FROM kundalis WHERE profile_id = p.id ORDER BY created_at DESC, id DESC LIMIT 1
@@ -123,9 +193,10 @@ export async function listProfiles(
        ORDER BY p.created_at DESC, p.id DESC
        LIMIT ?`,
     )
-    .bind(...binds, opts.limit + 1)
+    .bind(ownerId, ...binds, opts.limit + 1)
     .all<
       ProfileRow & {
+        owner_id: string;
         k_id: string | null;
         k_ayanamsa: string;
         k_chart_style: string;
@@ -152,7 +223,14 @@ export async function listProfiles(
         });
         kundaliStatus = stale ? 'stale' : 'current';
       }
-      return { ...profile, kundaliStatus, lastSessionAt: r.last_session_at };
+      const shared = r.owner_id !== ownerId;
+      return {
+        ...profile,
+        kundaliStatus,
+        lastSessionAt: r.last_session_at,
+        access: shared ? 'shared' : 'owner',
+        sharedBy: shared ? r.owner_id : null,
+      };
     }),
   );
   const last = page.at(-1);

@@ -5,6 +5,8 @@ declare namespace Cloudflare {
     ASKPANCHANG_API_KEY?: string;
     /** Cloudflare Access application audience; set as a secret in production only. */
     ACCESS_AUD?: string;
+    /** Comma-separated admin emails; set as a secret in production only. */
+    ADMIN_EMAILS?: string;
   }
 }
 
@@ -19,4 +21,6 @@ interface Env {
   ASKPANCHANG_API_KEY?: string;
   /** Cloudflare Access application audience; set as a secret in production only. */
   ACCESS_AUD?: string;
+  /** Comma-separated admin emails; set as a secret in production only. */
+  ADMIN_EMAILS?: string;
 }

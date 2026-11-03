@@ -36,7 +36,7 @@ describe('session page', () => {
       [`GET /api/sessions/${SESSION.id}`]: () =>
         Response.json({ session: SESSION, messages: stored, kundaliOutdated: false }),
       [`GET /api/profiles/${PROFILE.id}`]: () =>
-        Response.json({ profile: PROFILE, latestKundali: null }),
+        Response.json({ profile: PROFILE, latestKundali: null, access: 'owner', sharedBy: null }),
       [`GET /api/kundali/${SESSION.kundaliId}`]: () =>
         Response.json({
           kundali: {
@@ -91,7 +91,7 @@ describe('session page', () => {
       [`GET /api/sessions/${SESSION.id}`]: () =>
         Response.json({ session: SESSION, messages: [], kundaliOutdated: true }),
       [`GET /api/profiles/${PROFILE.id}`]: () =>
-        Response.json({ profile: PROFILE, latestKundali: null }),
+        Response.json({ profile: PROFILE, latestKundali: null, access: 'owner', sharedBy: null }),
       [`POST /api/sessions/${SESSION.id}/messages`]: () =>
         Response.json(
           {

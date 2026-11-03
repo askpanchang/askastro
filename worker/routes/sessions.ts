@@ -70,6 +70,7 @@ export function sessionRoutes(llmFor: (env: Env) => LlmClient) {
         throw new AppError(409, 'NO_KUNDALI', 'Generate a kundali before starting a Q&A session.');
       }
       const id = await insertSession(c.env.DB, {
+        ownerId,
         profileId: profile.id,
         kundaliId: latest.id,
         title: DEFAULT_SESSION_TITLE,
@@ -111,7 +112,9 @@ export function sessionRoutes(llmFor: (env: Env) => LlmClient) {
         db,
         c.get('ownerId'),
         'questions',
-        limitFor(c.env.RATE_LIMIT_QUESTIONS_PER_HOUR, 30),
+        c.get('isAdmin')
+          ? limitFor(c.env.RATE_LIMIT_QUESTIONS_PER_HOUR, 30)
+          : limitFor(c.env.RATE_LIMIT_FAMILY_QUESTIONS_PER_HOUR, 10),
       );
       if (await hasActiveAnswer(db, session.id)) {
         throw new AppError(409, 'ANSWER_IN_PROGRESS', 'Wait for the current answer to finish.');

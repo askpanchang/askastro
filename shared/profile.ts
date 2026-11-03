@@ -82,9 +82,17 @@ export type Profile = z.infer<typeof ProfileSchema>;
 export const KundaliStatusSchema = z.enum(['none', 'current', 'stale']);
 export type KundaliStatus = z.infer<typeof KundaliStatusSchema>;
 
+/** 'owner': you created it. 'shared': someone shared it with you (view + Q&A only). */
+export const ProfileAccessSchema = z.enum(['owner', 'shared']);
+export type ProfileAccess = z.infer<typeof ProfileAccessSchema>;
+
 export const ProfileListItemSchema = ProfileSchema.extend({
   kundaliStatus: KundaliStatusSchema,
+  /** Your own most recent Q&A activity on this profile. */
   lastSessionAt: z.string().nullable(),
+  access: ProfileAccessSchema,
+  /** Owner's email when the profile is shared with you. */
+  sharedBy: z.string().nullable(),
 });
 export type ProfileListItem = z.infer<typeof ProfileListItemSchema>;
 
@@ -113,8 +121,29 @@ export type KundaliSummary = z.infer<typeof KundaliSummarySchema>;
 export const ProfileDetailSchema = z.object({
   profile: ProfileSchema,
   latestKundali: KundaliSummarySchema.nullable(),
+  access: ProfileAccessSchema,
+  sharedBy: z.string().nullable(),
 });
 export type ProfileDetail = z.infer<typeof ProfileDetailSchema>;
 
 export const ProfileResponseSchema = z.object({ profile: ProfileSchema });
 export const OkSchema = z.object({ ok: z.literal(true) });
+
+/* ── Sharing ───────────────────────────────────────────────────────────── */
+
+export const MAX_SHARES_PER_PROFILE = 20;
+
+export const ShareCreateSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .pipe(z.email({ error: 'Enter a valid email address' }).max(254)),
+});
+
+export const ShareSchema = z.object({ email: z.string(), createdAt: z.string() });
+export type Share = z.infer<typeof ShareSchema>;
+export const ShareListSchema = z.object({ items: z.array(ShareSchema) });
+
+export const MeSchema = z.object({ email: z.string(), isAdmin: z.boolean() });
+export type Me = z.infer<typeof MeSchema>;

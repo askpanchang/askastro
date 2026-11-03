@@ -5,10 +5,10 @@ const HOUR_MS = 60 * 60 * 1000;
 export type LimitKind = 'questions' | 'kundalis';
 
 const QUERIES: Record<LimitKind, string> = {
-  // Questions asked by this owner (sessions of deleted profiles still count).
+  // Questions asked by this user, in their own sessions (deleted ones still count).
   questions: `SELECT COUNT(*) AS n, MIN(m.created_at) AS oldest FROM qa_messages m
-    JOIN qa_sessions s ON s.id = m.session_id JOIN profiles p ON p.id = s.profile_id
-    WHERE p.owner_id = ? AND m.role = 'user' AND m.created_at > ?`,
+    JOIN qa_sessions s ON s.id = m.session_id
+    WHERE s.owner_id = ? AND m.role = 'user' AND m.created_at > ?`,
   kundalis: `SELECT COUNT(*) AS n, MIN(k.created_at) AS oldest FROM kundalis k
     JOIN profiles p ON p.id = k.profile_id WHERE p.owner_id = ? AND k.created_at > ?`,
 };
