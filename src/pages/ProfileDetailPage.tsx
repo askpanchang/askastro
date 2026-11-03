@@ -4,7 +4,6 @@ import {
   Clock,
   MapPin,
   PencilSimple,
-  Sparkle,
   Trash,
   Warning,
 } from '@phosphor-icons/react';
@@ -13,6 +12,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { GENDER_LABELS, type ProfileDetail } from '../../shared/profile';
 import { useDeleteProfile, useProfile } from '../api/profiles';
 import { BackLink } from '../components/BackLink';
+import { KundaliPanel } from '../components/kundali/KundaliPanel';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useToast } from '../components/Toaster';
 import { Button, EmptyState, ErrorState, Spinner, buttonClass } from '../components/ui';
@@ -26,12 +26,15 @@ const TABS = [
 type TabId = (typeof TABS)[number]['id'];
 
 export function ProfileDetailPage() {
-  const { id = '' } = useParams();
+  const { id = '', kid } = useParams();
+  const navigate = useNavigate();
   const detail = useProfile(id);
-  const [params, setParams] = useSearchParams();
-  const tab: TabId = TABS.some((t) => t.id === params.get('tab'))
-    ? (params.get('tab') as TabId)
-    : 'kundali';
+  const [params] = useSearchParams();
+  const tab: TabId = kid
+    ? 'kundali'
+    : TABS.some((t) => t.id === params.get('tab'))
+      ? (params.get('tab') as TabId)
+      : 'kundali';
 
   if (detail.isPending) return <Spinner label="Loading profile…" />;
   if (detail.isError) {
@@ -56,28 +59,22 @@ export function ProfileDetailPage() {
           className="flex items-start gap-2 rounded-xl border border-amber/40 bg-saffron-soft p-3 text-sm"
         >
           <Warning size={18} className="mt-0.5 shrink-0 text-amber" aria-hidden />
-          Birth details changed since the kundali was generated. Regenerate it to use the new
+          Birth details changed since the latest kundali was generated. Regenerate it to use the new
           details.
         </div>
       )}
 
       <Tabs
         active={tab}
-        onChange={(t) => setParams(t === 'kundali' ? {} : { tab: t }, { replace: true })}
+        onChange={(t) =>
+          navigate(t === 'kundali' ? `/profiles/${id}` : `/profiles/${id}?tab=${t}`, {
+            replace: true,
+          })
+        }
       />
 
       <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
-        {tab === 'kundali' &&
-          (latestKundali ? (
-            <p className="text-sm text-muted">Kundali generated {latestKundali.createdAt}.</p>
-          ) : (
-            <EmptyState icon={<Sparkle size={40} aria-hidden />} title="No kundali yet">
-              <p className="max-w-sm text-sm text-muted">
-                Generating a kundali from {profile.name}'s birth details is the next feature being
-                built.
-              </p>
-            </EmptyState>
-          ))}
+        {tab === 'kundali' && <KundaliPanel profile={profile} kundaliId={kid} />}
         {tab === 'sessions' && (
           <EmptyState icon={<ChatsCircle size={40} aria-hidden />} title="No Q&A sessions yet">
             <p className="max-w-sm text-sm text-muted">

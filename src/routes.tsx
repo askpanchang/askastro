@@ -13,6 +13,7 @@ export const routes: RouteObject[] = [
       { path: 'profiles/new', element: <NewProfilePage /> },
       { path: 'profiles/:id', element: <ProfileDetailPage /> },
       { path: 'profiles/:id/edit', element: <EditProfilePage /> },
+      { path: 'profiles/:id/kundali/:kid', element: <ProfileDetailPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],
   },
