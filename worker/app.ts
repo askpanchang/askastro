@@ -1,12 +1,26 @@
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import type { Health } from '../shared/api';
 import { AppError, errorBody } from './lib/errors';
+import { ownerMiddleware } from './lib/owner';
+import { geocodeRoutes } from './routes/geocode';
+import { profiles } from './routes/profiles';
+import type { Geocoder } from './services/geocoder';
+import type { AppEnv } from './types';
 
-export type AppEnv = { Bindings: Env };
+export type AppDeps = { geocoder?: Geocoder };
 
-export function createApp() {
+export function createApp(deps: AppDeps = {}) {
   const app = new Hono<AppEnv>();
   const api = new Hono<AppEnv>();
+
+  api.use(
+    bodyLimit({
+      maxSize: 64 * 1024,
+      onError: (c) => c.json(errorBody('PAYLOAD_TOO_LARGE', 'Request body is too large'), 413),
+    }),
+  );
+  api.use(ownerMiddleware);
 
   api.get('/health', async (c) => {
     let db: 'ok' | 'error' = 'ok';
@@ -24,6 +38,9 @@ export function createApp() {
     return c.json(body, db === 'ok' ? 200 : 503);
   });
 
+  api.route('/profiles', profiles);
+  api.route('/geocode', geocodeRoutes(deps.geocoder));
+
   api.notFound((c) => c.json(errorBody('NOT_FOUND', 'Route not found'), 404));
 
   app.route('/api', api);
@@ -32,7 +49,7 @@ export function createApp() {
     if (err instanceof AppError) {
       return c.json(errorBody(err.code, err.message, err.details), err.status);
     }
-    // Log only the error type/message, never request bodies (personal data).
+    // Log only the error type, never request bodies (personal data).
     console.error('unhandled_error', err instanceof Error ? err.name : 'unknown');
     return c.json(errorBody('INTERNAL_ERROR', 'Something went wrong'), 500);
   });

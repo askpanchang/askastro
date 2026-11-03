@@ -18,7 +18,7 @@
       "migrations_dir": "migrations",
     },
   ],
-  "ai": { "binding": "AI" },
+  "ai": { "binding": "AI", "remote": true },
   "vars": {
     "APP_NAME": "Kundali Studio",
     "ASKPANCHANG_API_BASE": "https://askpanchang-api-edge.askpanchang.workers.dev",
