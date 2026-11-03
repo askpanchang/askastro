@@ -11,3 +11,8 @@ declare namespace Cloudflare {
     mainModule: typeof import('./index');
   }
 }
+
+// `Env` (global) and `Cloudflare.Env` are separate interfaces in the generated types.
+interface Env {
+  ASKPANCHANG_API_KEY?: string;
+}

@@ -22,6 +22,8 @@
   "vars": {
     "APP_NAME": "Kundali Studio",
     "ASKPANCHANG_API_BASE": "https://askpanchang-api-edge.askpanchang.workers.dev",
+    // Header used for the optional ASKPANCHANG_API_KEY secret.
+    "ASKPANCHANG_API_KEY_HEADER": "x-api-key",
     // Provisional; verify against the current Workers AI catalog (see CLAUDE.md).
     "AI_MODEL": "@cf/openai/gpt-oss-120b",
     "AI_GATEWAY_ID": "",

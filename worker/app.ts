@@ -4,11 +4,16 @@ import type { Health } from '../shared/api';
 import { AppError, errorBody } from './lib/errors';
 import { ownerMiddleware } from './lib/owner';
 import { geocodeRoutes } from './routes/geocode';
+import { kundaliRoutes } from './routes/kundali';
 import { profiles } from './routes/profiles';
+import { AskPanchangClient, type KundaliClient } from './services/askpanchang';
 import type { Geocoder } from './services/geocoder';
 import type { AppEnv } from './types';
 
-export type AppDeps = { geocoder?: Geocoder };
+export type AppDeps = {
+  geocoder?: Geocoder;
+  kundaliClient?: (env: Env) => KundaliClient;
+};
 
 export function createApp(deps: AppDeps = {}) {
   const app = new Hono<AppEnv>();
@@ -40,6 +45,7 @@ export function createApp(deps: AppDeps = {}) {
 
   api.route('/profiles', profiles);
   api.route('/geocode', geocodeRoutes(deps.geocoder));
+  api.route('/', kundaliRoutes(deps.kundaliClient ?? ((env) => new AskPanchangClient(env))));
 
   api.notFound((c) => c.json(errorBody('NOT_FOUND', 'Route not found'), 404));
 
