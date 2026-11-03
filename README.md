@@ -4,7 +4,7 @@ Create birth profiles, generate Vedic kundali charts with the AskPanchang Kundal
 AI Q&A sessions about a chart on Cloudflare Workers AI. One Cloudflare Worker serves both the
 React SPA and the `/api` routes.
 
-> Status: Phases 0–3 done (profiles, kundali, Q&A). See `docs/BUILD_PROMPT.md` for the full spec and phase plan.
+> Status: Phases 0–4 done (profiles, kundali, Q&A, hardening). See `docs/BUILD_PROMPT.md` for the full spec and phase plan.
 
 ## Requirements
 
@@ -64,6 +64,14 @@ No Cloudflare login? Run `npm run dev:local`. Everything works except real AI an
 | `ACCESS_AUD`           | var                | no       | Verify the Cloudflare Access JWT  |
 
 Secrets go in `.dev.vars` locally (git-ignored) and `wrangler secret put <NAME>` in production.
+
+## Security
+
+- **Sign-in:** the app is meant to sit behind Cloudflare Access (email allowlist). With `ACCESS_AUD` and `ACCESS_TEAM_DOMAIN` set, the Worker verifies the Access JWT on every API call and keeps each user's data separate. Leave them empty only for local development.
+- **Limits:** per-user hourly limits on questions and kundali generation (429 with `Retry-After`).
+- **Headers:** CSP, `X-Frame-Options: DENY`, `nosniff`, HSTS and a strict referrer policy on pages (`public/_headers`) and API responses; API responses are `no-store`.
+- **Cross-site requests:** writes from other origins are rejected.
+- **Privacy:** logs contain IDs and error codes only, never birth details or chat text.
 
 ## Deploy
 

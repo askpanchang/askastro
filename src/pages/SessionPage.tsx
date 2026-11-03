@@ -145,6 +145,7 @@ function SessionView({
           </p>
         )}
 
+        <h2 className="sr-only">Conversation</h2>
         <ol className="space-y-4" aria-label="Conversation">
           {messages.map((m) => (
             <MessageBubble key={m.id} message={m} />

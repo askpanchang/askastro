@@ -4,6 +4,7 @@ import { getProfile } from '../db/profiles';
 import { getKundaliDetail, insertKundali, listKundaliVersions } from '../db/kundalis';
 import { AppError } from '../lib/errors';
 import { isId } from '../lib/ids';
+import { enforceHourlyLimit, limitFor } from '../lib/rateLimit';
 import { parseValue } from '../lib/validate';
 import { buildKundaliRequest, type KundaliClient } from '../services/askpanchang';
 import { buildChartDigest } from '../services/chartDigest';
@@ -27,6 +28,12 @@ export function kundaliRoutes(clientFor: (env: Env) => KundaliClient) {
         }
       }
       const options = parseValue(KundaliOptionsSchema, body);
+      await enforceHourlyLimit(
+        c.env.DB,
+        c.get('ownerId'),
+        'kundalis',
+        limitFor(c.env.RATE_LIMIT_KUNDALIS_PER_HOUR, 20),
+      );
 
       const request = buildKundaliRequest(profile, options);
       const { data, raw } = await clientFor(c.env).generate(request);

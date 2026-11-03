@@ -1,7 +1,7 @@
 # CLAUDE.md — Kundali Studio
 
 Product spec: `docs/BUILD_PROMPT.md` (the source of truth for scope, phases and rules).
-Build status: **Phases 0–3 done** (scaffold, profiles, kundali, Q&A). Next: Phase 4 (hardening).
+Build status: **Phases 0–4 done** (scaffold, profiles, kundali, Q&A, hardening). Next: Phase 5 (deploy).
 
 ## Stack (installed versions)
 
@@ -30,10 +30,13 @@ npm run db:migrate:local / db:migrate:remote
 
 ## Layout
 
-- `worker/index.ts` — entry; `worker/app.ts` — `createApp(deps)` builds the Hono app (all routes under `/api`; `deps` lets tests swap services such as the geocoder). Middleware: 64 KB body limit, `ownerMiddleware`.
+- `worker/index.ts` — entry; `worker/app.ts` — `createApp(deps)` builds the Hono app (all routes under `/api`; `deps` lets tests swap services such as the geocoder). Order: `apiHeaders` (all `/api/*`) → `GET /api/health` (public) → `sameOriginOnly` → 64 KB body limit → `ownerMiddleware` → routes.
+- `worker/lib/security.ts` — `apiHeaders` (nosniff, DENY, referrer policy, `default-src 'none'` CSP, `cache-control: no-store` unless set, `Retry-After` on 429) and `sameOriginOnly` (403 `CROSS_ORIGIN` for non-GET requests with a foreign `Origin` or `Sec-Fetch-Site: cross-site|same-site`).
+- `worker/lib/rateLimit.ts` — `enforceHourlyLimit(db, owner, 'questions'|'kundalis', limit)`: sliding 1 h window counted from existing rows (no extra table); 429 `RATE_LIMITED` with `details.retryAfter`. Limits from `RATE_LIMIT_QUESTIONS_PER_HOUR` (30) / `RATE_LIMIT_KUNDALIS_PER_HOUR` (20); checked before calling upstream.
+- `public/_headers` — CSP and security headers for the SPA shell (Workers applies it to static assets only). `public/theme-init.js` sets the theme before paint (no inline scripts, so CSP `script-src 'self'`).
 - `worker/routes/*` — one Hono sub-app per resource. `worker/db/*` — SQL + row↔API mapping. `worker/services/*` — external APIs.
 - `worker/lib/validate.ts` — `parseJson` / `parseQuery` / `parseValue` throw `VALIDATION_ERROR` (400) with `z.flattenError` details (`{ formErrors, fieldErrors }`).
-- `worker/lib/owner.ts` — `c.get('ownerId')` = Access email header, else `'default'`. Every query filters by owner (kundalis/sessions via their profile).
+- `worker/lib/owner.ts` — sets `c.get('ownerId')`. With `ACCESS_AUD` set: verifies the Cloudflare Access JWT (`Cf-Access-Jwt-Assertion` header or `CF_Authorization` cookie) with `jose` against `${ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs` (issuer = team domain, audience = `ACCESS_AUD`, RS256); owner = lower-cased `email` claim; 401 `UNAUTHENTICATED` / 403 `FORBIDDEN` (no email, e.g. service token) / 500 `AUTH_MISCONFIGURED` (no team domain). Without `ACCESS_AUD` (dev/tests): `Cf-Access-Authenticated-User-Email` header, else `'default'`. Tests swap keys via `accessKeys.get`. Every query filters by owner (kundalis/sessions via their profile).
 - `worker/lib/hash.ts` — `chartInputHash(profile, options)`: SHA-256 of chart-relevant birth data (not name/notes) + ayanamsa/chart/lang. A kundali is stale when this differs from its stored `input_hash`.
 - `worker/lib/cursor.ts` — opaque keyset cursor over `(created_at DESC, id DESC)`.
 - `worker/services/askpanchang.ts` — `buildKundaliRequest(profile, options)` (unknown time → `12:00`, place sent as `loc`) and `AskPanchangClient` (15 s timeout, one retry on 5xx/network, `KUNDALI_INVALID_INPUT` 422 / `KUNDALI_UPSTREAM_ERROR` 502, optional key in header `ASKPANCHANG_API_KEY_HEADER`). Returns `{ data, raw }`; `raw` is stored verbatim in `kundalis.response_json`. Swappable via `createApp({ kundaliClient })`.
@@ -91,7 +94,10 @@ Profile rules: `tobUnknown` ⇒ `tob` stored as NULL; otherwise `tob` required (
 - **`@cloudflare/vitest-pool-workers` is deprecated** → use `@cloudflare/vitest-plugin` (`cloudflareTest()` Vite plugin in `vitest.config.ts`). Tests run with `remoteBindings: false`.
 - **npm 10.9 crashes** (`Cannot read properties of null (reading 'edgesOut')`) when resolving the tree from scratch. Use `npx npm@11 install <pkg>` to add deps; `npm ci` with npm 10 works from the lockfile. npm 11 blocks install scripts unless approved: `allowScripts` in package.json lists esbuild and workerd (run `npx npm@11 install-scripts approve esbuild workerd` after upgrades that bump their versions).
 - **No ORM:** plain D1 prepared statements; SQL migrations are the schema source of truth (BUILD_PROMPT allows this; Drizzle would duplicate the schema).
-- **Owner header is not verified yet.** Phase 4 must verify the Access JWT (`ACCESS_AUD`) before production.
+- **Production must set `ACCESS_AUD` and `ACCESS_TEAM_DOMAIN`.** Without them the Worker trusts the email header, which is only safe locally. (Cloudflare also offers `ctx.access` for Workers behind Access; we use explicit JWT verification as the spec asks, and because it is testable.)
+- Light-theme `--saffron` is `#a84f00` and `--amber` `#92400e` to pass WCAG AA (white on saffron 5.55:1). axe-core (wcag2a/aa, 21aa, best-practice) reports no violations on list, form, kundali and session pages in both themes.
+- Routes `profiles/:id`, `profiles/:id/kundali/:kid` and `sessions/:id` are lazy (`route.lazy`), so charts and Markdown load on demand.
+- Hardening tests call `createApp().fetch(req, { ...env, ...overrides }, ctx)` to set vars per test. For streaming responses, read the body **before** `waitOnExecutionContext`, or it deadlocks.
 - `kundalis.time_uncertain` (migration 0002) records unknown-time charts; the request payload can't distinguish them from a real noon birth.
 - **workerd can't use the sandbox's HTTPS proxy** (it does its own DNS), so in the cloud build sandbox the local Worker can't reach AskPanchang/Open-Meteo. For manual testing there, run a Node relay (Node honours the proxy with `NODE_USE_ENV_PROXY=1`) and point `ASKPANCHANG_API_BASE` at it via `.dev.vars`. Not needed on a normal machine or in production. Tests read `.dev.vars` too, so assert against `env.ASKPANCHANG_API_BASE`, not a literal URL.
 - React Compiler lint (`react-hooks/purity`) forbids `Date.now()` in render; use `useNowSec()`.

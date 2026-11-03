@@ -3,6 +3,7 @@ import { bodyLimit } from 'hono/body-limit';
 import type { Health } from '../shared/api';
 import { AppError, errorBody } from './lib/errors';
 import { ownerMiddleware } from './lib/owner';
+import { apiHeaders, sameOriginOnly } from './lib/security';
 import { geocodeRoutes } from './routes/geocode';
 import { kundaliRoutes } from './routes/kundali';
 import { sessionRoutes } from './routes/sessions';
@@ -22,14 +23,9 @@ export function createApp(deps: AppDeps = {}) {
   const app = new Hono<AppEnv>();
   const api = new Hono<AppEnv>();
 
-  api.use(
-    bodyLimit({
-      maxSize: 64 * 1024,
-      onError: (c) => c.json(errorBody('PAYLOAD_TOO_LARGE', 'Request body is too large'), 413),
-    }),
-  );
-  api.use(ownerMiddleware);
+  app.use('/api/*', apiHeaders);
 
+  // Liveness: public (no auth) and reveals nothing beyond up/down.
   api.get('/health', async (c) => {
     let db: 'ok' | 'error' = 'ok';
     try {
@@ -45,6 +41,15 @@ export function createApp(deps: AppDeps = {}) {
     };
     return c.json(body, db === 'ok' ? 200 : 503);
   });
+
+  api.use(sameOriginOnly);
+  api.use(
+    bodyLimit({
+      maxSize: 64 * 1024,
+      onError: (c) => c.json(errorBody('PAYLOAD_TOO_LARGE', 'Request body is too large'), 413),
+    }),
+  );
+  api.use(ownerMiddleware);
 
   api.route('/profiles', profiles);
   api.route('/geocode', geocodeRoutes(deps.geocoder));
