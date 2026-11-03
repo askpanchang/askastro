@@ -25,6 +25,7 @@ import {
 } from '../db/sessions';
 import { AppError } from '../lib/errors';
 import { isId } from '../lib/ids';
+import { enforceHourlyLimit, limitFor } from '../lib/rateLimit';
 import { parseJson, parseValue } from '../lib/validate';
 import { buildChartDigest } from '../services/chartDigest';
 import type { LlmClient } from '../services/llm';
@@ -106,6 +107,12 @@ export function sessionRoutes(llmFor: (env: Env) => LlmClient) {
       const db = c.env.DB;
       const session = await requireSession(db, c.get('ownerId'), c.req.param('id'));
       const { question } = await parseJson(c, AskSchema);
+      await enforceHourlyLimit(
+        db,
+        c.get('ownerId'),
+        'questions',
+        limitFor(c.env.RATE_LIMIT_QUESTIONS_PER_HOUR, 30),
+      );
       if (await hasActiveAnswer(db, session.id)) {
         throw new AppError(409, 'ANSWER_IN_PROGRESS', 'Wait for the current answer to finish.');
       }

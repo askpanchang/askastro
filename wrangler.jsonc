@@ -27,7 +27,13 @@
     // Provisional; verify against the current Workers AI catalog (see CLAUDE.md).
     "AI_MODEL": "@cf/openai/gpt-oss-120b",
     "AI_GATEWAY_ID": "",
+    // Cloudflare Access: set both in production (Phase 5). Empty = local dev
+    // (owner from the Cf-Access-Authenticated-User-Email header, else "default").
     "ACCESS_AUD": "",
+    "ACCESS_TEAM_DOMAIN": "",
+    // Per-owner sliding one-hour limits.
+    "RATE_LIMIT_QUESTIONS_PER_HOUR": "30",
+    "RATE_LIMIT_KUNDALIS_PER_HOUR": "20",
   },
   "observability": { "enabled": true },
 }
