@@ -31,7 +31,9 @@ export class WorkersAiLlm implements LlmClient {
       messages,
       stream: true,
       max_tokens: MAX_TOKENS,
-      temperature: 0.4,
+      // OpenAI recommends temperature 1.0 for gpt-oss; lower values caused
+      // repetition loops and leaked reasoning in live tests (Hindi especially).
+      temperature: 1,
       reasoning_effort: 'medium',
       stream_options: { include_usage: true },
     };
@@ -64,12 +66,16 @@ export async function* parseModelStream(
   const parser = new SseParser();
   const onAbort = () => void reader.cancel().catch(() => {});
   signal?.addEventListener('abort', onAbort);
+  let finished = false;
   try {
     while (true) {
       const { value, done } = await reader.read();
       const events = done ? parser.end() : parser.push(decoder.decode(value, { stream: true }));
       for (const ev of events) {
-        if (ev.data === '[DONE]') return;
+        if (ev.data === '[DONE]') {
+          finished = true;
+          return;
+        }
         let json: unknown;
         try {
           json = JSON.parse(ev.data);
@@ -78,10 +84,15 @@ export async function* parseModelStream(
         }
         yield* chunkEvents(json);
       }
-      if (done) return;
+      if (done) {
+        finished = true;
+        return;
+      }
     }
   } finally {
     signal?.removeEventListener('abort', onAbort);
+    // Consumer stopped early (Stop, error, malformed output): stop the model too.
+    if (!finished) await reader.cancel().catch(() => {});
     reader.releaseLock();
   }
 }
@@ -138,4 +149,17 @@ export class DevEchoLlm implements LlmClient {
     }
     yield { type: 'usage', tokensIn: Math.round(system.length / 3), tokensOut: words.length };
   }
+}
+
+/**
+ * Detects broken model output: leaked chat-template markers (gpt-oss's
+ * "<|start|>…<|end|>" / "assistantfinal") or a runaway repetition loop.
+ * Returns the index where the clean text ends, or -1 if the text looks fine.
+ */
+export function findDegeneration(text: string): number {
+  const marker = text.search(/<\|(?:start|end|channel|message|return)\|>|assistantfinal/);
+  if (marker >= 0) return marker;
+  // The same short word repeated 12+ times in a row.
+  const loop = /(?:^|\s)(\S{1,24})(?:\s+\1){11,}/u.exec(text);
+  return loop ? loop.index : -1;
 }

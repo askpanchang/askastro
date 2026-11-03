@@ -4,7 +4,7 @@ Create birth profiles, generate Vedic kundali charts with the AskPanchang Kundal
 AI Q&A sessions about a chart on Cloudflare Workers AI. One Cloudflare Worker serves both the
 React SPA and the `/api` routes.
 
-> Status: Phases 0–4 done (profiles, kundali, Q&A, hardening). See `docs/BUILD_PROMPT.md` for the full spec and phase plan.
+> Status: v1 complete and live at https://kundali-studio.askpanchang.workers.dev (behind Cloudflare Access). See `docs/BUILD_PROMPT.md` for the full spec and phase plan.
 
 ## Requirements
 
@@ -75,4 +75,36 @@ Secrets go in `.dev.vars` locally (git-ignored) and `wrangler secret put <NAME>`
 
 ## Deploy
 
-Covered in Phase 5 (Workers Builds from `main`; GitHub Actions alternative).
+Production is one Worker, `kundali-studio`, on `kundali-studio.askpanchang.workers.dev`, protected by a Cloudflare Access application of the same name (team `ask-panchang`). The D1 database `kundali-studio` is in APAC.
+
+### Automatic (GitHub Actions, the default)
+
+`.github/workflows/deploy.yml`:
+
+- **Pull requests:** `npm ci`, `npm run check` and `npm run build`.
+- **Pushes to `main`** (or a manual run): the same checks, then `wrangler d1 migrations apply DB --remote`, `wrangler deploy`, and a smoke check that `/` redirects to the Access login.
+
+It needs two repository secrets (Settings → Secrets and variables → Actions): `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. The token needs Workers Scripts: Edit, D1: Edit and Account Settings: Read on the account.
+
+### Manual
+
+```bash
+npx wrangler login
+npm run db:migrate:remote
+npm run deploy
+```
+
+### One-time setup (already done for production)
+
+1. Create the database: `npx wrangler d1 create kundali-studio --location apac` (location can't change later), and put its ID in `wrangler.jsonc`.
+2. In Zero Trust, create a self-hosted Access application for the Worker's hostname, with an Allow policy listing the operators' emails. Turn on a login method (for example One-time PIN) for people outside the Cloudflare account.
+3. Set the application's audience tag as a Worker secret: `npx wrangler secret put ACCESS_AUD`. It is a secret, not a var, so local dev stays login-free. `ACCESS_TEAM_DOMAIN` is a var in `wrangler.jsonc`.
+4. Keep `preview_urls: false` in `wrangler.jsonc`: preview hostnames are not covered by the Access application.
+
+### Workers Builds (alternative)
+
+Connect the repo under Workers & Pages → `kundali-studio` → Settings → Build: build command `npm run build`, deploy command `npx wrangler deploy`. Migrations still need running (add `npx wrangler d1 migrations apply DB --remote` before the deploy command). Use either Workers Builds or the GitHub workflow, not both.
+
+### Adding people
+
+Zero Trust → Access → Applications → Kundali Studio → Policies → add their email. Each person sees only their own profiles and sessions.

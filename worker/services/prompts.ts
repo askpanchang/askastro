@@ -1,12 +1,23 @@
 import type { ChatMessage } from './llm';
 
 /** Bump when the system prompt or context format changes; stored on each answer. */
-export const PROMPT_VERSION = '2026-11-03.1';
+export const PROMPT_VERSION = '2026-11-03.2';
+
+// Planet (Sun…Ketu) and sign (Aries…Pisces) names from the AskPanchang
+// dictionary (/api/v1/dict?lang=hi|te), so answers use standard spellings.
+const GLOSSARY: Record<string, string> = {
+  hi:
+    'Planets Sun→Ketu: सूर्य, चंद्र, मंगल, बुध, गुरु, शुक्र, शनि, राहु, केतु. ' +
+    'Signs Aries→Pisces: मेष, वृषभ, मिथुन, कर्क, सिंह, कन्या, तुला, वृश्चिक, धनु, मकर, कुंभ, मीन.',
+  te:
+    'Planets Sun→Ketu: సూర్యుడు, చంద్రుడు, కుజుడు, బుధుడు, గురువు, శుక్రుడు, శని, రాహువు, కేతువు. ' +
+    'Signs Aries→Pisces: మేషం, వృషభం, మిథునం, కర్కాటకం, సింహం, కన్య, తుల, వృశ్చికం, ధనుస్సు, మకరం, కుంభం, మీనం.',
+};
 
 const LANGUAGE_RULE: Record<string, string> = {
   en: 'Answer in English.',
-  hi: 'Answer in Hindi (Devanagari script). Keep planet, sign and nakshatra names in their usual Sanskrit/Hindi form.',
-  te: 'Answer in Telugu (Telugu script). Keep planet, sign and nakshatra names in their usual Sanskrit/Telugu form.',
+  hi: `Answer in Hindi (Devanagari script). Use exactly these names: ${GLOSSARY.hi} Translate facts from the chart data carefully; do not change any sign, house or dignity while translating.`,
+  te: `Answer in Telugu (Telugu script). Use exactly these names: ${GLOSSARY.te} Translate facts from the chart data carefully; do not change any sign, house or dignity while translating.`,
 };
 
 export function systemPrompt(lang: string): string {
@@ -15,6 +26,7 @@ export function systemPrompt(lang: string): string {
 GROUNDING
 - Base every statement on the CHART DATA provided. Name the specific placements, house lords, aspects, yogas, doshas or dasha periods behind each point (for example "Mars, lord of the 1st and 6th, sits in its own sign in the 6th house").
 - Never invent placements, degrees, yogas or dates that are not in the data. If the data needed to answer is missing, say so plainly.
+- Read the PLANETS table carefully: the "sign degree" column is the birth-chart (D1) sign; the "D9 sign" column is the navamsa only. Check each placement you cite against the table before writing it.
 - Use the dasha dates and today's date from the data when talking about timing. Don't assume transits beyond those listed.
 
 ANSWER FORMAT (Markdown)

@@ -1,7 +1,7 @@
 # CLAUDE.md — Kundali Studio
 
 Product spec: `docs/BUILD_PROMPT.md` (the source of truth for scope, phases and rules).
-Build status: **Phases 0–4 done** (scaffold, profiles, kundali, Q&A, hardening). Next: Phase 5 (deploy).
+Build status: **v1 complete (Phases 0–5).** Live at https://kundali-studio.askpanchang.workers.dev behind Cloudflare Access.
 
 ## Stack (installed versions)
 
@@ -89,6 +89,15 @@ Profile rules: `tobUnknown` ⇒ `tob` stored as NULL; otherwise `tob` required (
 - Invalid input (bad date, lat 999) returns a plain-text **500**, not 422, so validate before calling.
 - Response parsing is lenient (`z.looseObject`); only info, charts, pl, houses and dasha are required.
 
+## Production
+
+- Account: askpanchang@gmail.com (Workers **Free** plan). Worker `kundali-studio` on `kundali-studio.askpanchang.workers.dev` (`preview_urls: false`).
+- D1 `kundali-studio`, id `fd888024-a97c-47d0-b25d-73333b057d74`, location APAC (users are in India; location is fixed at creation).
+- Access: Zero Trust team `ask-panchang` (`https://ask-panchang.cloudflareaccess.com`), self-hosted app "Kundali Studio" (id `77fbfba6-4dbb-405a-94ee-e5ee9b7a197f`) with policy "Allowed operators" = askpanchang@gmail.com, session 24 h. `ACCESS_AUD` is a **Worker secret** (not a var, so local dev stays login-free); `ACCESS_TEAM_DOMAIN` is a var.
+- Login methods: only the Cloudflare-account login (account members) is configured. Adding someone outside the account needs a login method such as One-time PIN, added in Zero Trust → Settings → Authentication; the deploy token can't change that.
+- Deploys: `.github/workflows/deploy.yml` (checks on PRs; on main: migrations → deploy → smoke check that `/` is 302 to Access). Uses the repo's pinned Wrangler via `npx`, and repository secrets `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`.
+- Other Workers, D1 databases and an Access app (staging-api) in this account belong to other projects: don't touch them.
+
 ## Decisions and gotchas
 
 - **`@cloudflare/vitest-pool-workers` is deprecated** → use `@cloudflare/vitest-plugin` (`cloudflareTest()` Vite plugin in `vitest.config.ts`). Tests run with `remoteBindings: false`.
@@ -106,7 +115,9 @@ Profile rules: `tobUnknown` ⇒ `tob` stored as NULL; otherwise `tob` required (
 - Playwright: don't `page.route('**/api/geocode**')` — it also matches Vite's `/src/api/geocode.ts` module. Use a regex like `/\/api\/geocode\?/`.
 - `wrangler types --strict-vars=false` so vars are typed as `string`, not literals.
 - **D1 `database_id`** in `wrangler.jsonc` is a zero-UUID placeholder until the remote DB is created (Phase 5).
-- **AI model: `@cf/openai/gpt-oss-120b`** (checked against the Workers AI catalog, Nov 2026): 128k context, streaming, reasoning (low/medium/high), $0.35 / $0.75 per M tokens, available without the Workers Paid plan. Alternatives if Hindi/Telugu quality disappoints: `@cf/deepseek-ai/deepseek-v4.1-flash-1017` (1M ctx) or `@cf/moonshotai/kimi-k2.6` (262k), both Paid-plan only and pricier. Input/output types confirmed from `worker-configuration.d.ts` (`Base_Ai_Cf_Openai_Gpt_Oss_120B`: chat-completions or Responses input; Responses API is non-streaming only, so we use chat-completions). **Not yet exercised against the live model** (needs Cloudflare credentials); first real run should check the stream chunk format and answer quality (BUILD_PROMPT §15 spot-check).
+- **AI model: `@cf/openai/gpt-oss-120b`** (checked against the Workers AI catalog, Nov 2026): 128k context, streaming, reasoning (low/medium/high), $0.35 / $0.75 per M tokens, available without the Workers Paid plan. Alternatives if Hindi/Telugu quality disappoints: `@cf/deepseek-ai/deepseek-v4.1-flash-1017` (1M ctx) or `@cf/moonshotai/kimi-k2.6` (262k), both Paid-plan only and pricier. Input/output types confirmed from `worker-configuration.d.ts` (`Base_Ai_Cf_Openai_Gpt_Oss_120B`: chat-completions or Responses input; Responses API is non-streaming only, so we use chat-completions). Live-tested (Nov 2026) through the REST API with the real prompt: the stream is OpenAI `chat.completion.chunk` (`delta.content`; reasoning in `delta.reasoning` / `reasoning_content`, ignored), and `usage` arrives on most chunks (sometimes zeros) and again in a final `{ response: "", usage }` chunk, so we keep the max. English answers are well grounded; the off-topic refusal works. Paid-plan models (DeepSeek, Kimi) return 403 on this Free-plan account.
+- **Temperature 1.0** (OpenAI's recommendation for gpt-oss). At 0.4 a Hindi health question looped ("Mah Mah …"), leaked the chat template (`<|end|><|start|>assistantfinal`) into content, hit `max_tokens` and answered in English. `findDegeneration()` stops such output mid-stream (502 `AI_MALFORMED_ANSWER`, clean prefix saved as `status=error`).
+- Hindi/Telugu answers are usable but less precise than English (some English transliterations such as जुपिटर, the occasional invented detail). The prompt carries a hi/te glossary of planet and sign names from the AskPanchang dictionary and a rule to check D1 vs D9 columns (`PROMPT_VERSION` 2026-11-03.2). For better Indic quality, upgrade to Workers Paid and set `AI_MODEL` to a larger model, then re-run the spot-check.
 - One system message only: gpt-oss's chat template may drop a second system message.
 - `max_tokens` defaults to 256 on Workers AI and gpt-oss spends part of it on reasoning, so we send 4096.
 - `.dev.vars` is read by tests too: never leave `AI_MODEL=dev:echo` (or other overrides) there when running `npm test`.

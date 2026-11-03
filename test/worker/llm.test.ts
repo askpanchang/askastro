@@ -97,3 +97,16 @@ describe('titleFromQuestion', () => {
     );
   });
 });
+
+describe('findDegeneration', () => {
+  it('flags leaked chat-template markers and repetition loops', async () => {
+    const { findDegeneration } = await import('../../worker/services/llm');
+    expect(findDegeneration('A clean answer about Jupiter.')).toBe(-1);
+    expect(findDegeneration('Good start. <|end|><|start|>assistantfinal more')).toBe(12);
+    expect(findDegeneration('answer: assistantfinal x')).toBe(8);
+    const loop = 'Jupiter MD ' + 'Mah '.repeat(20);
+    expect(findDegeneration(loop)).toBe('Jupiter MD'.length);
+    // Normal repetition (a word a few times) is fine.
+    expect(findDegeneration('very very very good')).toBe(-1);
+  });
+});
