@@ -1,21 +1,14 @@
-import {
-  CalendarBlank,
-  ChatsCircle,
-  Clock,
-  MapPin,
-  PencilSimple,
-  Trash,
-  Warning,
-} from '@phosphor-icons/react';
+import { CalendarBlank, Clock, MapPin, PencilSimple, Trash, Warning } from '@phosphor-icons/react';
 import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { GENDER_LABELS, type ProfileDetail } from '../../shared/profile';
 import { useDeleteProfile, useProfile } from '../api/profiles';
 import { BackLink } from '../components/BackLink';
 import { KundaliPanel } from '../components/kundali/KundaliPanel';
+import { SessionsPanel } from '../components/qa/SessionsPanel';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useToast } from '../components/Toaster';
-import { Button, EmptyState, ErrorState, Spinner, buttonClass } from '../components/ui';
+import { Button, ErrorState, Spinner, buttonClass } from '../components/ui';
 import { formatDob, formatTob } from '../lib/format';
 
 const TABS = [
@@ -76,11 +69,7 @@ export function ProfileDetailPage() {
       <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
         {tab === 'kundali' && <KundaliPanel profile={profile} kundaliId={kid} />}
         {tab === 'sessions' && (
-          <EmptyState icon={<ChatsCircle size={40} aria-hidden />} title="No Q&A sessions yet">
-            <p className="max-w-sm text-sm text-muted">
-              Once a kundali exists, you can ask questions about it here.
-            </p>
-          </EmptyState>
+          <SessionsPanel profileId={profile.id} latestKundali={latestKundali} />
         )}
         {tab === 'details' && <DetailsPanel data={detail.data} />}
       </div>

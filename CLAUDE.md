@@ -1,7 +1,7 @@
 # CLAUDE.md — Kundali Studio
 
 Product spec: `docs/BUILD_PROMPT.md` (the source of truth for scope, phases and rules).
-Build status: **Phases 0–2 done** (scaffold, profiles, kundali). Next: Phase 3 (Q&A).
+Build status: **Phases 0–3 done** (scaffold, profiles, kundali, Q&A). Next: Phase 4 (hardening).
 
 ## Stack (installed versions)
 
@@ -40,6 +40,10 @@ npm run db:migrate:local / db:migrate:remote
 - `worker/services/chartDigest.ts` — `buildChartDigest({ data, profile, timeUncertain, asOfSec })`: deterministic LLM context (~1.5k tokens for the fixture). Stored at generation time; Phase 3 should rebuild it with `asOfSec = now` per question so "current dasha" and Sade Sati status are right (transits/dosha flags stay as of generation).
 - `shared/astro.ts` + `shared/astroLabels.generated.ts` — code → label maps. The generated file comes from `GET /api/v1/dict?lang=en` (v2026.7); `/api/v1/dict?lang=hi|te` has Hindi/Telugu labels if needed.
 - `shared/dasha.ts` — `currentDasha(data, atSec)` (MD/AD from the API, PD computed with `subPeriods`), verified against the API's `dasha_now`. `shared/chartModel.ts` — `toChartHouses(data, 'D1'|'D9'|…)` normalized chart for `ChartNorth`/`ChartSouth`.
+- `worker/services/llm.ts` — `LlmClient` interface; `WorkersAiLlm` (chat-completions input: `messages`, `max_tokens` 4096, `temperature`, `reasoning_effort`, `stream_options.include_usage`; optional AI Gateway via `AI_GATEWAY_ID`); `parseModelStream` reads OpenAI `choices[].delta.content` chunks (reasoning ignored) and legacy `{ response }` chunks; `DevEchoLlm` when `AI_MODEL=dev:echo`.
+- `worker/services/prompts.ts` — `systemPrompt(lang)`, `buildPrompt(...)` (single system message = rules + CHART DATA + today + time-uncertain flag; history trimmed oldest-first to 12k est. tokens), `PROMPT_VERSION` (stored on each answer; bump when prompts change).
+- `worker/routes/sessions.ts` — sessions CRUD and `POST /api/sessions/:id/messages` (SSE). The digest is rebuilt per question from the session's pinned kundali (`request_json` birth data, not the possibly-edited profile) with `asOfSec = now`.
+- `shared/sse.ts` — `SseParser` / `sseEvent`, used by both the Worker (model stream) and the browser (answer stream).
 - `worker/services/geocoder.ts` — `Geocoder` interface + `OpenMeteoGeocoder`. `/api/geocode` caches results 24 h in the Cache API (`caches.open('geocode')`).
 - `worker/lib/errors.ts` — `AppError(status, code, message, details?)`; thrown anywhere, rendered by `app.onError` as `{ error: { code, message, details? } }`.
 - `worker/env.d.ts` — secrets missing from `wrangler types` (`ASKPANCHANG_API_KEY`) and `GlobalProps.mainModule` (types `exports.default` in tests).
@@ -47,7 +51,7 @@ npm run db:migrate:local / db:migrate:remote
 - `src/api/client.ts` — `apiFetch(path, schema, init)`; throws `ApiRequestError` with the API error code.
 - `src/routes.tsx` — route table (used by `createBrowserRouter` in the app and `createMemoryRouter` in tests).
 - `src/styles/index.css` — design tokens as CSS variables on `:root` / `.dark`, mapped to Tailwind colours via `@theme inline` (`bg-surface`, `text-saffron`, …).
-- `src/pages/*` — ProfilesListPage, ProfileFormPage (new + edit), ProfileDetailPage (tabs via `?tab=`). `src/components/*` — ui primitives (`Button`, `inputClass`, `Spinner`, `ErrorState`, `EmptyState`), `ToastProvider`/`useToast`, `ConfirmDialog` (native `<dialog>`), `PlaceAutocomplete` (ARIA combobox).
+- `src/pages/*` — ProfilesListPage, ProfileFormPage (new + edit), ProfileDetailPage (tabs via `?tab=`), SessionPage (`/sessions/:id`: chat, starter chips, Stop, copy, rename, language, chart side panel / mobile bottom sheet). `src/api/sessions.ts` — hooks + `streamAnswer()`; `useSession` polls every 1 s while a stored answer is still `streaming`. `src/components/*` — ui primitives (`Button`, `inputClass`, `Spinner`, `ErrorState`, `EmptyState`), `ToastProvider`/`useToast`, `ConfirmDialog` (native `<dialog>`), `PlaceAutocomplete` (ARIA combobox).
 - `test/worker/*.test.ts` — run inside workerd; migrations applied in `test/worker/setup.ts`. Use `api(path, { owner, json })` from `helpers.ts`, and `freshOwner()` per test (storage is shared across tests in a file). Mock outbound HTTP with `vi.spyOn(globalThis, 'fetch')`.
 - `test/ui/*.test.tsx` — jsdom. `renderApp(path)` + `mockApi({ 'GET /api/x': handler })` from `renderApp.tsx`.
 
@@ -65,7 +69,11 @@ npm run db:migrate:local / db:migrate:remote
 
 `GET /api/health` · `GET|POST /api/profiles` (list: `q`, `cursor`, `limit` ≤ 50 → `{ items, nextCursor }`; items carry `kundaliStatus` none/current/stale and `lastSessionAt`) · `GET|PATCH|DELETE /api/profiles/:id` (detail → `{ profile, latestKundali }`; PATCH re-validates the merged row; DELETE is soft and returns `{ ok: true }`) · `GET /api/geocode?q=&lang=` · `POST /api/profiles/:id/kundali` (body optional: `{ ayanamsa: lahiri|raman, chartStyle: north|south, lang: en|hi|te }` → 201 `{ kundali }`) · `GET /api/profiles/:id/kundali` (versions, newest first, each with `stale`, `timeUncertain`) · `GET /api/kundali/:id` (`{ kundali: { …version, data, digest } }`).
 
-UI routes: `/profiles/:id` (Kundali tab = latest version), `/profiles/:id/kundali/:kid` (a specific version).
+`GET|POST /api/profiles/:id/sessions` (POST body optional `{ lang }`; 409 `NO_KUNDALI`; pins the latest kundali; lang defaults to the kundali's) · `GET|PATCH|DELETE /api/sessions/:id` (GET → `{ session, messages, kundaliOutdated }`; PATCH `{ title?, lang? }`) · `POST /api/sessions/:id/messages` `{ question }` (1–2000 chars; 409 `ANSWER_IN_PROGRESS`) → `text/event-stream` with events `start` `{ userMessageId, messageId }`, `token` `{ text }`, `done` `{ messageId, tokensIn, tokensOut }`, `error` `{ code, message }`.
+
+Streaming rules: the answer is generated inside `waitUntil` and always saved. Client disconnect / Stop → model stream cancelled, partial text saved as `complete` with "_(Answer stopped before it finished.)_" (or `error` if empty). Model failure → `error` with partial text kept. Session title = first question, ≤ 6 words (heuristic, no extra model call).
+
+UI routes: `/profiles/:id` (Kundali tab = latest version), `/profiles/:id/kundali/:kid` (a specific version), `/sessions/:id`.
 
 Profile rules: `tobUnknown` ⇒ `tob` stored as NULL; otherwise `tob` required (HH:MM). DOB must be a real date between 1800 and "today" in UTC+14. `tz` must be a valid IANA zone.
 
@@ -87,12 +95,15 @@ Profile rules: `tobUnknown` ⇒ `tob` stored as NULL; otherwise `tob` required (
 - `kundalis.time_uncertain` (migration 0002) records unknown-time charts; the request payload can't distinguish them from a real noon birth.
 - **workerd can't use the sandbox's HTTPS proxy** (it does its own DNS), so in the cloud build sandbox the local Worker can't reach AskPanchang/Open-Meteo. For manual testing there, run a Node relay (Node honours the proxy with `NODE_USE_ENV_PROXY=1`) and point `ASKPANCHANG_API_BASE` at it via `.dev.vars`. Not needed on a normal machine or in production. Tests read `.dev.vars` too, so assert against `env.ASKPANCHANG_API_BASE`, not a literal URL.
 - React Compiler lint (`react-hooks/purity`) forbids `Date.now()` in render; use `useNowSec()`.
-- `qa_messages` has no `prompt_version` column yet; add it in a Phase 3 migration (BUILD_PROMPT §9.3).
+- Migration 0003 adds `qa_messages.prompt_version` and `qa_sessions.lang`.
 - Zod skips object-level `superRefine` while field errors exist, so the form adds the "time required" error itself (`ProfileFormPage.validateProfileForm`).
 - Playwright: don't `page.route('**/api/geocode**')` — it also matches Vite's `/src/api/geocode.ts` module. Use a regex like `/\/api\/geocode\?/`.
 - `wrangler types --strict-vars=false` so vars are typed as `string`, not literals.
 - **D1 `database_id`** in `wrangler.jsonc` is a zero-UUID placeholder until the remote DB is created (Phase 5).
-- **AI model (provisional):** `@cf/openai/gpt-oss-120b`. Third-party listings show ~128k context, streaming, tool calling. **Not yet verified** against developers.cloudflare.com (blocked from the build sandbox). Verify the input schema (`messages` vs `input`/Responses API) before Phase 3.
+- **AI model: `@cf/openai/gpt-oss-120b`** (checked against the Workers AI catalog, Nov 2026): 128k context, streaming, reasoning (low/medium/high), $0.35 / $0.75 per M tokens, available without the Workers Paid plan. Alternatives if Hindi/Telugu quality disappoints: `@cf/deepseek-ai/deepseek-v4.1-flash-1017` (1M ctx) or `@cf/moonshotai/kimi-k2.6` (262k), both Paid-plan only and pricier. Input/output types confirmed from `worker-configuration.d.ts` (`Base_Ai_Cf_Openai_Gpt_Oss_120B`: chat-completions or Responses input; Responses API is non-streaming only, so we use chat-completions). **Not yet exercised against the live model** (needs Cloudflare credentials); first real run should check the stream chunk format and answer quality (BUILD_PROMPT §15 spot-check).
+- One system message only: gpt-oss's chat template may drop a second system message.
+- `max_tokens` defaults to 256 on Workers AI and gpt-oss spends part of it on reasoning, so we send 4096.
+- `.dev.vars` is read by tests too: never leave `AI_MODEL=dev:echo` (or other overrides) there when running `npm test`.
 
 ## Sandbox network notes
 
