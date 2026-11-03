@@ -3,7 +3,10 @@
   "name": "kundali-studio",
   "main": "worker/index.ts",
   "compatibility_date": "2026-11-02",
-  "compatibility_flags": ["nodejs_compat"],
+  // global_fetch_strictly_public: the AskPanchang API is a Worker in the same
+  // account; without this flag Cloudflare blocks Worker-to-Worker fetch()
+  // (it needs a service binding otherwise) and generation fails in production.
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "assets": {
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api/*"],
