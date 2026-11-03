@@ -28,7 +28,7 @@ import { isId } from '../lib/ids';
 import { enforceHourlyLimit, limitFor } from '../lib/rateLimit';
 import { parseJson, parseValue } from '../lib/validate';
 import { buildChartDigest } from '../services/chartDigest';
-import type { LlmClient } from '../services/llm';
+import { findDegeneration, type LlmClient } from '../services/llm';
 import { PROMPT_VERSION, buildPrompt, estimateTokens } from '../services/prompts';
 import type { KundaliRequest } from '../services/askpanchang';
 import type { AppEnv } from '../types';
@@ -190,10 +190,22 @@ export function sessionRoutes(llmFor: (env: Env) => LlmClient) {
           for await (const ev of llm.stream(messages, abort.signal)) {
             if (ev.type === 'token') {
               text += ev.text;
+              // Check the recent tail only, so long answers stay cheap to scan.
+              const tailStart = Math.max(0, text.length - ev.text.length - 400);
+              const bad = findDegeneration(text.slice(tailStart));
+              if (bad >= 0) {
+                text = text.slice(0, tailStart + bad).trimEnd();
+                throw new AppError(
+                  502,
+                  'AI_MALFORMED_ANSWER',
+                  'The answer went off the rails and was stopped. Please ask again.',
+                );
+              }
               await send('token', { text: ev.text });
             } else {
-              tokensIn = ev.tokensIn;
-              tokensOut = ev.tokensOut;
+              // gpt-oss sends usage on most chunks (sometimes zeros); keep the largest.
+              tokensIn = Math.max(tokensIn ?? 0, ev.tokensIn);
+              tokensOut = Math.max(tokensOut ?? 0, ev.tokensOut);
             }
             if (clientGone) break;
           }

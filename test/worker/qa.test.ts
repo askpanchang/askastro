@@ -180,6 +180,22 @@ describe('sessions', () => {
     });
   });
 
+  it('stops a malformed answer and keeps only the clean part', async () => {
+    const owner = freshOwner();
+    const { session } = await setup(owner);
+    mockAi(() =>
+      modelStream(['Jupiter is strong. ', '<|end|><|start|>', 'assistantfinal ', 'junk']),
+    );
+    const { events } = await ask(owner, session.id, 'Overview?');
+    expect(events.at(-1)).toMatchObject({ event: 'error', data: { code: 'AI_MALFORMED_ANSWER' } });
+    await vi.waitFor(async () => {
+      const d = SessionDetailSchema.parse(
+        await (await api(`/api/sessions/${session.id}`, { owner })).json(),
+      );
+      expect(d.messages.at(-1)).toMatchObject({ status: 'error', content: 'Jupiter is strong.' });
+    });
+  });
+
   it('reports an upstream error when the model cannot be called', async () => {
     const owner = freshOwner();
     const { session } = await setup(owner);
