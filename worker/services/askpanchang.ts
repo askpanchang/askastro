@@ -94,7 +94,11 @@ export class AskPanchangClient implements KundaliClient {
       }
       if (res.status < 500) break;
     }
-    if (!res) throw upstream();
+    if (!res) {
+      console.error('kundali_upstream_unreachable');
+      throw upstream();
+    }
+    if (!res.ok) console.error('kundali_upstream_status', res.status);
     if (res.status === 400 || res.status === 422) {
       throw new AppError(
         422,
