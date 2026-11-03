@@ -4,7 +4,7 @@ Create birth profiles, generate Vedic kundali charts with the AskPanchang Kundal
 AI Q&A sessions about a chart on Cloudflare Workers AI. One Cloudflare Worker serves both the
 React SPA and the `/api` routes.
 
-> Status: Phase 0 (scaffold). See `docs/BUILD_PROMPT.md` for the full spec and phase plan.
+> Status: Phases 0–3 done (profiles, kundali, Q&A). See `docs/BUILD_PROMPT.md` for the full spec and phase plan.
 
 ## Requirements
 
@@ -22,7 +22,21 @@ npm run dev
 
 Open the printed URL. `/api/health` should return `{"status":"ok",...,"db":"ok"}`.
 
-No Cloudflare login? Run `npm run dev:local`. Everything works except AI calls.
+Apply the database migrations once (and after pulling new ones):
+
+```bash
+npm run db:migrate:local
+```
+
+No Cloudflare login? Run `npm run dev:local`. Everything works except real AI answers. To try the Q&A flow offline, add `AI_MODEL=dev:echo` to `.dev.vars`: a development stand-in streams a canned answer that quotes the chart data it was given. Remove it before running tests.
+
+## Manual smoke test
+
+1. Create the sample profile: Arjun Sharma, male, 15 Aug 1990, 14:30, Hyderabad (pick it from the place search).
+2. On the Kundali tab, generate a kundali (Lahiri, North). Check the chart, tables and dasha timeline.
+3. On the Q&A tab, start a session and ask three questions (a starter chip, a typed question, and one you stop with **Stop**).
+4. Reload the page and reopen the session from the Q&A tab: all questions and answers are still there.
+5. Edit the birth time: the profile shows "Birth details changed", and the old session says it is tied to an earlier kundali.
 
 ## Scripts
 

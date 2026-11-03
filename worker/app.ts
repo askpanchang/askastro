@@ -5,14 +5,17 @@ import { AppError, errorBody } from './lib/errors';
 import { ownerMiddleware } from './lib/owner';
 import { geocodeRoutes } from './routes/geocode';
 import { kundaliRoutes } from './routes/kundali';
+import { sessionRoutes } from './routes/sessions';
 import { profiles } from './routes/profiles';
 import { AskPanchangClient, type KundaliClient } from './services/askpanchang';
 import type { Geocoder } from './services/geocoder';
+import { DevEchoLlm, WorkersAiLlm, type LlmClient } from './services/llm';
 import type { AppEnv } from './types';
 
 export type AppDeps = {
   geocoder?: Geocoder;
   kundaliClient?: (env: Env) => KundaliClient;
+  llm?: (env: Env) => LlmClient;
 };
 
 export function createApp(deps: AppDeps = {}) {
@@ -46,6 +49,13 @@ export function createApp(deps: AppDeps = {}) {
   api.route('/profiles', profiles);
   api.route('/geocode', geocodeRoutes(deps.geocoder));
   api.route('/', kundaliRoutes(deps.kundaliClient ?? ((env) => new AskPanchangClient(env))));
+  api.route(
+    '/',
+    sessionRoutes(
+      deps.llm ??
+        ((env) => (env.AI_MODEL === 'dev:echo' ? new DevEchoLlm() : new WorkersAiLlm(env))),
+    ),
+  );
 
   api.notFound((c) => c.json(errorBody('NOT_FOUND', 'Route not found'), 404));
 

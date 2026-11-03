@@ -4,6 +4,7 @@ import { NotFoundPage } from './pages/NotFoundPage';
 import { ProfileDetailPage } from './pages/ProfileDetailPage';
 import { EditProfilePage, NewProfilePage } from './pages/ProfileFormPage';
 import { ProfilesListPage } from './pages/ProfilesListPage';
+import { SessionPage } from './pages/SessionPage';
 
 export const routes: RouteObject[] = [
   {
@@ -14,6 +15,7 @@ export const routes: RouteObject[] = [
       { path: 'profiles/:id', element: <ProfileDetailPage /> },
       { path: 'profiles/:id/edit', element: <EditProfilePage /> },
       { path: 'profiles/:id/kundali/:kid', element: <ProfileDetailPage /> },
+      { path: 'sessions/:id', element: <SessionPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],
   },

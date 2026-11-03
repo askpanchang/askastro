@@ -79,3 +79,39 @@ h3 {
   outline: 2px solid var(--saffron);
   outline-offset: 2px;
 }
+
+/* Markdown answers */
+.prose-answer {
+  @apply space-y-3 text-sm leading-relaxed;
+}
+.prose-answer h1,
+.prose-answer h2,
+.prose-answer h3,
+.prose-answer h4 {
+  @apply mt-4 font-display text-base font-semibold;
+}
+.prose-answer ul {
+  @apply list-disc space-y-1 pl-5;
+}
+.prose-answer ol {
+  @apply list-decimal space-y-1 pl-5;
+}
+.prose-answer a {
+  @apply text-saffron underline underline-offset-2;
+}
+.prose-answer strong {
+  @apply font-semibold;
+}
+.prose-answer code {
+  @apply rounded bg-surface-2 px-1 py-0.5 text-[0.85em];
+}
+.prose-answer table {
+  @apply block w-full overflow-x-auto border-collapse text-left;
+}
+.prose-answer th,
+.prose-answer td {
+  @apply border border-border px-2 py-1;
+}
+.prose-answer blockquote {
+  @apply border-l-4 border-border pl-3 text-muted;
+}
