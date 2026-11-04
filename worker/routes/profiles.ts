@@ -59,9 +59,12 @@ export async function requireProfile(db: D1Database, userId: string, id: string)
   return (await requireReadableProfile(db, userId, id)).profile;
 }
 
-export function requireAdmin(isAdmin: boolean) {
+export function requireAdmin(
+  isAdmin: boolean,
+  message = 'Only the app owner can create profiles.',
+) {
   if (!isAdmin) {
-    throw new AppError(403, 'ADMIN_ONLY', 'Only the app owner can create profiles.');
+    throw new AppError(403, 'ADMIN_ONLY', message);
   }
 }
 

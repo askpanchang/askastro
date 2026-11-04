@@ -1,6 +1,6 @@
 import { Link, Outlet } from 'react-router';
 import { APP_NAME } from '../../shared/app';
-import { Lightning } from '@phosphor-icons/react';
+import { GearSix, Lightning } from '@phosphor-icons/react';
 import { useMe } from '../api/me';
 import { useUsage } from '../api/usage';
 import { headlinePercent } from '../lib/usageFormat';
@@ -30,6 +30,16 @@ export function Layout() {
               <Lightning size={14} aria-hidden />
               {used === null ? 'Usage' : `${used}%`}
             </Link>
+            {me.data?.isAdmin && (
+              <Link
+                to="/settings"
+                className="rounded-full p-1.5 text-muted hover:bg-surface-2 hover:text-text"
+                aria-label="Settings"
+                title="Settings"
+              >
+                <GearSix size={18} aria-hidden />
+              </Link>
+            )}
             {me.data && me.data.email !== 'default' && (
               <span
                 className="hidden max-w-48 truncate text-xs text-muted sm:inline"

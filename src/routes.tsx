@@ -10,6 +10,7 @@ const profileDetail = () =>
   import('./pages/ProfileDetailPage').then((m) => ({ Component: m.ProfileDetailPage }));
 const session = () => import('./pages/SessionPage').then((m) => ({ Component: m.SessionPage }));
 const usage = () => import('./pages/UsagePage').then((m) => ({ Component: m.UsagePage }));
+const settings = () => import('./pages/SettingsPage').then((m) => ({ Component: m.SettingsPage }));
 
 export const routes: RouteObject[] = [
   {
@@ -23,6 +24,7 @@ export const routes: RouteObject[] = [
       { path: 'profiles/:id/kundali/:kid', lazy: profileDetail },
       { path: 'sessions/:id', lazy: session },
       { path: 'usage', lazy: usage },
+      { path: 'settings', lazy: settings },
       { path: '*', element: <NotFoundPage /> },
     ],
   },
