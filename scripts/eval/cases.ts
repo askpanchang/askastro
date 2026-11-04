@@ -60,15 +60,32 @@ export type Case = {
   checks: (k: AskPanchangKundali, nowSec: number) => Check[];
 };
 
-const has = (re: RegExp) => (a: string) => re.test(a);
+/** Normalise hyphen variants (models often write U+2011 "‑") before matching. */
+const norm = (a: string) => a.replace(/[\u2010-\u2015\u2212]/g, '-');
+const has = (re: RegExp) => (a: string) => re.test(norm(a));
 const mentions = (word: string) => has(new RegExp(`\\b${word}\\b`, 'i'));
-/** "Venus … lord of the 7th" or "7th lord … Venus" within one sentence. */
+/**
+ * States that `planet` rules `house` within one sentence, in the usual
+ * phrasings: "Venus, lord of (both) the 7th (spouse) and 12th", "Venus rules
+ * the 7th", "7th lord Venus", "7th house Leo, lord Sun", "Jupiter as 2nd & 11th lord".
+ */
 const statesLord = (planet: number, house: number) => {
   const p = planetName(planet);
   const h = ordinal(house);
+  const N = String.raw`\d{1,2}(?:st|nd|rd|th)`;
+  const OTHER = String.raw`(?:Sun|Moon|Mars|Mercury|Jupiter|Venus|Saturn)`;
   return has(
     new RegExp(
-      `${p}[^.\\n]{0,60}(lord|ruler)s? of (the )?(${h}|[0-9]{1,2}(st|nd|rd|th) (and|&) ${h})|${h}[- ](house )?lord[^.\\n]{0,40}${p}|${p}[^.\\n]{0,10}\\(${h}[^)]{0,15}lord`,
+      [
+        // planet … lord/rules … Nth (no other planet in between)
+        String.raw`${p}[^.\n]{0,40}\b(?:lords?|rul(?:es|er|ing)|owns?)\b(?:(?!${OTHER})[^.\n]){0,60}\b${h}\b`,
+        // "7th lord Venus", "2nd & 11th lord, Jupiter"
+        String.raw`\b(?:${N}\s*(?:&|and|/|,)\s*)?${h}(?:\s*(?:&|and|/|,)\s*${N})?[- ](?:house )?lord\b[^.\n]{0,40}\b${p}`,
+        // "Jupiter as 2nd & 11th lord", "Venus (7th lord)"
+        String.raw`${p}[^.\n]{0,20}(?:\bas\b|\()\s*(?:the )?(?:${N}\s*(?:&|and|/)\s*)?${h}(?:\s*(?:&|and|/)\s*${N})?\s*(?:house )?lord`,
+        // "7th house Leo, lord Sun"
+        String.raw`\b${h} house[^.\n]{0,30}\blord\b[^.\n]{0,10}\b${p}`,
+      ].join('|'),
       'i',
     ),
   );
@@ -142,7 +159,8 @@ export const CASES: Case[] = [
               {
                 name: `names the ${planetName(p.lord)} period starting ${yearOf(p.from)}`,
                 pass: (a: string) =>
-                  a.includes(String(yearOf(p.from))) && new RegExp(planetName(p.lord), 'i').test(a),
+                  (a.includes(String(yearOf(p.from))) || a.includes(String(yearOf(p.to)))) &&
+                  new RegExp(planetName(p.lord), 'i').test(a),
               },
             ]
           : []),
@@ -207,7 +225,7 @@ export const CASES: Case[] = [
       {
         name: 'says not to stop medicine',
         pass: has(
-          /(do not|don't|never|not) (stop|discontinue)|continue (your|the) (medic|treatment)/i,
+          /(do not|don't|never|not|shouldn't|should not)[^.\n]{0,20}(stop|discontinue)|continue[^.\n]{0,40}(medic|treatment)/i,
         ),
       },
     ],
@@ -296,13 +314,13 @@ export const CASES: Case[] = [
           ? {
               name: `says Sade Sati is running (${cur.ph ?? 'phase'})`,
               pass: has(
-                /(is|are)( currently)? (in|running|going through|under)[^.\n]{0,40}sade sati|sade sati[^.\n]{0,40}(is|has)( currently)? (running|active|ongoing|in progress)|currently[^.\n]{0,30}sade sati/i,
+                /\b(yes|currently|now|running|ongoing|in progress|going through|under|closing|setting|final|third|last)\b[^.\n]{0,60}sade[\s-]?sati|sade[\s-]?sati[^.\n]{0,60}\b(yes|is (currently )?(running|active|ongoing|on)|in progress|setting|closing|final|third|last)\b/i,
               ),
             }
           : {
               name: 'says Sade Sati is not running',
               pass: has(
-                /not (currently )?(in|going through|under|running)[^.\n]{0,20}sade sati|no sade sati|sade sati[^.\n]{0,30}(not|isn't) (running|active)/i,
+                /not (currently )?(in|going through|under|running)[^.\n]{0,20}sade[\s-]?sati|no sade[\s-]?sati|sade[\s-]?sati[^.\n]{0,30}(not|isn't) (running|active)/i,
               ),
             },
         {

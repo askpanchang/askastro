@@ -31,7 +31,7 @@ import { enforceDailyAiLimit } from '../services/aiUsage';
 import { buildChartDigest } from '../services/chartDigest';
 import { correctionNote, factCheck } from '../services/factCheck';
 import { detectTopics, topicLines } from '../services/topics';
-import { fetchTransits } from '../services/transits';
+import { fetchTransits, transitSignSets } from '../services/transits';
 import { findDegeneration, type LlmClient } from '../services/llm';
 import { PROMPT_VERSION, buildPrompt, estimateTokens } from '../services/prompts';
 import type { KundaliRequest } from '../services/askpanchang';
@@ -176,6 +176,9 @@ export function sessionRoutes(llmFor: (env: Env) => LlmClient) {
         PROMPT_VERSION,
       );
       await updateSession(db, session.id, {
+        // Answers come from the configured model; keep the session's record (used
+        // for usage estimates) in step if it was created under another model.
+        model: session.model !== c.env.AI_MODEL ? c.env.AI_MODEL : undefined,
         title:
           session.messageCount === 0 && session.title === DEFAULT_SESSION_TITLE
             ? titleFromQuestion(question)
@@ -248,7 +251,7 @@ export function sessionRoutes(llmFor: (env: Env) => LlmClient) {
             });
           } else {
             // Check stated lordships/signs/houses against the chart; append corrections.
-            const note = correctionNote(factCheck(text, data));
+            const note = correctionNote(factCheck(text, data, transitSignSets(transits)));
             if (note) {
               text += note;
               await send('token', { text: note });

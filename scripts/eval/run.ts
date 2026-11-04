@@ -18,7 +18,7 @@ import { factCheck } from '../../worker/services/factCheck';
 import { parseModelStream } from '../../worker/services/llm';
 import { buildPrompt } from '../../worker/services/prompts';
 import { detectTopics, topicLines } from '../../worker/services/topics';
-import { fetchTransits } from '../../worker/services/transits';
+import { fetchTransits, transitSignSets } from '../../worker/services/transits';
 import { CASES, CHARTS } from './cases';
 
 const arg = (name: string, fallback?: string) => {
@@ -95,9 +95,45 @@ async function ask(model: string, messages: { role: string; content: string }[])
   return { text, tin, tout, seconds: (Date.now() - started) / 1000 };
 }
 
+function loadChart(meta: (typeof CHARTS)[string]) {
+  return AskPanchangKundaliSchema.parse(
+    JSON.parse(readFileSync(join(fixtures, meta.file), 'utf8')),
+  );
+}
+
+/** Re-score saved answers with the current grader and fact-checker (no model calls). */
+function regrade(file: string, transitSigns: Map<number, Set<number>>): Result[] {
+  const saved = JSON.parse(readFileSync(file, 'utf8')) as Result[];
+  return saved.map((r) => {
+    const c = CASES.find((x) => x.id === r.case);
+    if (!c) return r;
+    const k = loadChart(CHARTS[c.chart]!);
+    const checks = c.checks(k, nowSec);
+    const failed = checks.filter((ch) => !ch.pass(r.answer)).map((ch) => ch.name);
+    const found = factCheck(r.answer, k, transitSigns);
+    for (const f of found)
+      console.log(`  ${modelSettings(r.model).label} / ${r.case}: "${f.claim}" → ${f.correction}`);
+    return {
+      ...r,
+      passed: checks.length - failed.length,
+      total: checks.length,
+      failed,
+      errors: found.length,
+      issues: found.map((i) => i.correction),
+    };
+  });
+}
+
 async function main() {
   mkdirSync(outDir, { recursive: true });
-  const results: Result[] = [];
+  const regradeFile = arg('regrade');
+  const results: Result[] = regradeFile
+    ? regrade(regradeFile, transitSignSets(await fetchTransits(env as Env, nowSec, 'lahiri')))
+    : [];
+  if (regradeFile) {
+    report(results, [...new Set(results.map((r) => r.model))]);
+    return;
+  }
   const transits = await fetchTransits(env as Env, nowSec, 'lahiri');
   console.log(`Transits: ${transits ? 'live' : 'unavailable (using generation-day snapshot)'}`);
 
@@ -140,7 +176,7 @@ async function main() {
         const a = await ask(model, messages);
         const checks = c.checks(k, nowSec);
         const failed = checks.filter((ch) => !ch.pass(a.text)).map((ch) => ch.name);
-        const issues = factCheck(a.text, k).map((i) => i.correction);
+        const issues = factCheck(a.text, k, transitSignSets(transits)).map((i) => i.correction);
         results.push({
           model,
           case: c.id,
@@ -163,6 +199,10 @@ async function main() {
     }
   }
 
+  report(results, models);
+}
+
+function report(results: Result[], models: string[]) {
   // Summary per model
   const lines = [
     '| Model | Facts passed | Fact errors | Avg neurons | Avg seconds |',

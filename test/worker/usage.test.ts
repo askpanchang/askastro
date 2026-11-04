@@ -108,9 +108,12 @@ describe('GET /api/usage', () => {
 
     const mine = UsageSchema.parse((await as(kid, '/api/usage', { overrides })).json());
     expect(mine).toMatchObject({ budget: 10_000, userLimit: 5_000, you: { questions: 1 } });
-    expect(mine.you.neurons).toBeCloseTo(174.7, 0);
+    // Estimated with the configured model's rates (sessions record AI_MODEL).
+    expect(mine.you.neurons).toBeCloseTo(neuronsFor(env.AI_MODEL, 2415, 1435), 0);
     expect(mine.account.source).toBe('estimate');
-    expect(mine.account.neurons).toBeGreaterThanOrEqual(833);
+    expect(mine.account.neurons).toBeGreaterThanOrEqual(
+      Math.floor(neuronsFor(env.AI_MODEL, 2415, 1435) + neuronsFor(env.AI_MODEL, 10_000, 5_000)),
+    );
     expect(mine.people).toBeUndefined();
     expect(mine.history).toBeUndefined();
 

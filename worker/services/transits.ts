@@ -196,3 +196,18 @@ export function transitLines(
   );
   return out;
 }
+
+/** Signs each planet occupies now or during the timeline (for the fact-checker). */
+export function transitSignSets(snap: TransitSnapshot | null): Map<number, Set<number>> {
+  const out = new Map<number, Set<number>>();
+  if (!snap) return out;
+  for (const p of snap.planets) out.set(p.p, new Set([p.r]));
+  for (const e of snap.events) {
+    if (e.typ === 'rashi' && e.to !== undefined) {
+      const set = out.get(e.p) ?? new Set<number>();
+      set.add(e.to);
+      out.set(e.p, set);
+    }
+  }
+  return out;
+}

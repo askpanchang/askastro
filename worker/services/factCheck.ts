@@ -66,11 +66,25 @@ const ORD_LIST = String.raw`${ORD}(?:\s*(?:,|and|&|/)\s*(?:the\s+)?${ORD})?`;
 
 /** Sentences where another frame of reference makes different signs/houses correct. */
 const OTHER_FRAME =
-  /\b(transit|transiting|gochar|enters|entering|moves into|will move|will be in|from the moon|from moon|chandra lagna|moon chart|navamsa|navamsha|d-?9|d-?10|dasamsa|d-?\d{1,2}\b|varga|chalit|from the sun|from venus|from jupiter|in the [a-z]+ chart)/i;
+  /\b(transit|transits|transiting|gochar|currently|right now|enters|entering|moves? into|will move|will be in|from the moon|from moon|chandra lagna|moon chart|navamsa|navamsha|d-?9|d-?10|dasamsa|d-?\d{1,2}\b|varga|chalit|from the sun|from venus|from jupiter|in the [a-z]+ chart|sade sati|panoti|dhaiya|ashtama shani)\b|→|->/i;
 
-const clean = (s: string) => s.replace(/[*_`]/g, '').replace(/\s+/g, ' ');
+/** Strip Markdown and normalise hyphen variants (models often use U+2011 "‑"). */
+const clean = (s: string) =>
+  s
+    .replace(/[\u2010-\u2015\u2212]/g, '-')
+    .replace(/[*_`]/g, '')
+    .replace(/\s+/g, ' ');
 
-export function factCheck(answer: string, k: AskPanchangKundali): FactIssue[] {
+/**
+ * `transitSigns`: signs each planet occupies now or over the transit timeline.
+ * A claim that a planet is "in" one of those is ambiguous (likely about the
+ * transit), so it isn't flagged.
+ */
+export function factCheck(
+  answer: string,
+  k: AskPanchangKundali,
+  transitSigns?: Map<number, Set<number>>,
+): FactIssue[] {
   const lords = lordships(k);
   const sign = new Map(k.pl.map((p) => [p.p, p.r]));
   const house = new Map(k.pl.map((p) => [p.p, p.h]));
@@ -123,7 +137,7 @@ export function factCheck(answer: string, k: AskPanchangKundali): FactIssue[] {
     )) {
       const p = PLANETS[m[1]!.toLowerCase()]!;
       const claimed = SIGNS[m[2]!.toLowerCase()]!;
-      if (sign.has(p) && sign.get(p) !== claimed) {
+      if (sign.has(p) && sign.get(p) !== claimed && !transitSigns?.get(p)?.has(claimed)) {
         add(
           m[0],
           `${planetName(p)} is in ${signName(sign.get(p)!)} in the birth chart, not ${signName(claimed)}.`,
