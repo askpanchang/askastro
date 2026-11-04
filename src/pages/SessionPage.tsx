@@ -28,6 +28,8 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { KundaliSummary } from '../components/kundali/KundaliSummary';
 import { Markdown } from '../components/qa/Markdown';
 import { useToast } from '../components/Toaster';
+import { UsageLine, UsageMeters } from '../components/UsageMeter';
+import { usageKey, useUsage } from '../api/usage';
 import { Button, ErrorState, Spinner, inputClass } from '../components/ui';
 
 const MAX_QUESTION = 2000;
@@ -121,6 +123,7 @@ function SessionView({
       }
       // The stored messages (complete, stopped or failed) are the source of truth.
       await qc.invalidateQueries({ queryKey: sessionKeys.detail(session.id) });
+      void qc.invalidateQueries({ queryKey: usageKey });
       setPending(null);
     },
     [qc, session.id, streaming, toast],
@@ -459,6 +462,9 @@ function Composer({
           ? `Too long: ${value.length} / ${MAX_QUESTION} characters`
           : 'Enter to send · Shift+Enter for a new line'}
       </p>
+      <div className="mt-1">
+        <UsageLine />
+      </div>
     </form>
   );
 }
@@ -478,12 +484,23 @@ function ChartPanel({ kundaliId, tz, bare }: { kundaliId: string; tz?: string; b
           Birth time unknown: ascendant and house-based answers are unreliable.
         </p>
       )}
+      <AiUsageCard />
       <Link
         to={`/profiles/${k.profileId}/kundali/${k.id}`}
         className="inline-block text-sm font-semibold text-saffron underline-offset-4 hover:underline"
       >
         Open full kundali
       </Link>
+    </div>
+  );
+}
+
+function AiUsageCard() {
+  const usage = useUsage();
+  if (!usage.data) return null;
+  return (
+    <div className="rounded-xl border border-border bg-surface p-3">
+      <UsageMeters usage={usage.data} />
     </div>
   );
 }

@@ -27,6 +27,7 @@ import { AppError } from '../lib/errors';
 import { isId } from '../lib/ids';
 import { enforceHourlyLimit, limitFor } from '../lib/rateLimit';
 import { parseJson, parseValue } from '../lib/validate';
+import { enforceDailyAiLimit } from '../services/aiUsage';
 import { buildChartDigest } from '../services/chartDigest';
 import { findDegeneration, type LlmClient } from '../services/llm';
 import { PROMPT_VERSION, buildPrompt, estimateTokens } from '../services/prompts';
@@ -116,6 +117,7 @@ export function sessionRoutes(llmFor: (env: Env) => LlmClient) {
           ? limitFor(c.env.RATE_LIMIT_QUESTIONS_PER_HOUR, 30)
           : limitFor(c.env.RATE_LIMIT_FAMILY_QUESTIONS_PER_HOUR, 10),
       );
+      await enforceDailyAiLimit(c.env, c.get('ownerId'));
       if (await hasActiveAnswer(db, session.id)) {
         throw new AppError(409, 'ANSWER_IN_PROGRESS', 'Wait for the current answer to finish.');
       }

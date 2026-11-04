@@ -9,6 +9,7 @@ import { geocodeRoutes } from './routes/geocode';
 import { kundaliRoutes } from './routes/kundali';
 import { sessionRoutes } from './routes/sessions';
 import { profiles } from './routes/profiles';
+import { buildUsage } from './services/aiUsage';
 import { AskPanchangClient, type KundaliClient } from './services/askpanchang';
 import type { Geocoder } from './services/geocoder';
 import { DevEchoLlm, WorkersAiLlm, type LlmClient } from './services/llm';
@@ -56,6 +57,9 @@ export function createApp(deps: AppDeps = {}) {
     const body: Me = { email: c.get('ownerId'), isAdmin: c.get('isAdmin') };
     return c.json(body);
   });
+  api.get('/usage', async (c) =>
+    c.json(await buildUsage(c.env, c.get('ownerId'), c.get('isAdmin'))),
+  );
   api.route('/profiles', profiles);
   api.route('/geocode', geocodeRoutes(deps.geocoder));
   api.route('/', kundaliRoutes(deps.kundaliClient ?? ((env) => new AskPanchangClient(env))));

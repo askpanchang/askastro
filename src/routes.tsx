@@ -9,6 +9,7 @@ import { ProfilesListPage } from './pages/ProfilesListPage';
 const profileDetail = () =>
   import('./pages/ProfileDetailPage').then((m) => ({ Component: m.ProfileDetailPage }));
 const session = () => import('./pages/SessionPage').then((m) => ({ Component: m.SessionPage }));
+const usage = () => import('./pages/UsagePage').then((m) => ({ Component: m.UsagePage }));
 
 export const routes: RouteObject[] = [
   {
@@ -21,6 +22,7 @@ export const routes: RouteObject[] = [
       { path: 'profiles/:id/edit', element: <EditProfilePage /> },
       { path: 'profiles/:id/kundali/:kid', lazy: profileDetail },
       { path: 'sessions/:id', lazy: session },
+      { path: 'usage', lazy: usage },
       { path: '*', element: <NotFoundPage /> },
     ],
   },
