@@ -260,7 +260,7 @@ export function buildChartDigest({
 
   /* Transits: live at question time when available, else the generation-day snapshot */
   if (transits) {
-    out.push(...transitLines(k, transits, tz, timeUncertain));
+    out.push(...transitLines(k, transits, tz, timeUncertain, asOfSec));
   } else if (k.transits.length) {
     section('SLOW-PLANET TRANSITS (at chart generation; may have moved since)');
     out.push(
