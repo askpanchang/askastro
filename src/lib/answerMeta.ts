@@ -1,16 +1,22 @@
 import { modelSettings } from '../../shared/models';
 import type { Message } from '../../shared/session';
+import { neuronsFor } from '../../shared/usage';
 
 const num = new Intl.NumberFormat('en-IN');
 
-/** "DeepSeek V4.1 Flash · 2,415 in / 1,435 out tokens · 19.2 s" for a stored answer. */
+/**
+ * "DeepSeek V4.1 Flash · 222 neurons · 19.2 s" for a stored answer. Neurons are
+ * estimated from the answer's tokens at the model's rate (as on the Usage page).
+ */
 export function answerMeta(
   m: Partial<Pick<Message, 'model' | 'tokensIn' | 'tokensOut' | 'durationMs'>>,
 ): string {
   const parts: string[] = [];
   if (m.model) parts.push(modelSettings(m.model).label);
-  if (m.tokensIn != null && m.tokensOut != null)
-    parts.push(`${num.format(m.tokensIn)} in / ${num.format(m.tokensOut)} out tokens`);
+  if (m.model && m.tokensIn != null && m.tokensOut != null) {
+    const n = neuronsFor(m.model, m.tokensIn, m.tokensOut);
+    parts.push(n > 0 && n < 1 ? '<1 neuron' : `${num.format(Math.round(n))} neurons`);
+  }
   if (m.durationMs != null)
     parts.push(
       m.durationMs < 60_000
