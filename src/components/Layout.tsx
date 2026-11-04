@@ -3,13 +3,14 @@ import { APP_NAME } from '../../shared/app';
 import { Lightning } from '@phosphor-icons/react';
 import { useMe } from '../api/me';
 import { useUsage } from '../api/usage';
-import { pct } from '../lib/usageFormat';
+import { headlinePercent } from '../lib/usageFormat';
 import { ThemeToggle } from './ThemeToggle';
 
 export function Layout() {
   const me = useMe();
   const usage = useUsage();
-  const used = usage.data ? pct(usage.data.you.neurons, usage.data.userLimit) : null;
+  const headline = usage.data ? headlinePercent(usage.data) : null;
+  const used = headline?.percent ?? null;
   return (
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-10 border-b border-border bg-surface/90 backdrop-blur">
@@ -22,7 +23,9 @@ export function Layout() {
             <Link
               to="/usage"
               className={`inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-xs font-semibold hover:bg-surface-2 ${used !== null && used >= 80 ? 'text-amber' : 'text-muted'}`}
-              aria-label={used === null ? 'AI usage' : `AI usage: ${used}% of your daily share`}
+              aria-label={
+                headline ? `AI usage: ${headline.percent}% of ${headline.of}` : 'AI usage'
+              }
             >
               <Lightning size={14} aria-hidden />
               {used === null ? 'Usage' : `${used}%`}

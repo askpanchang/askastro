@@ -1,16 +1,18 @@
 import { neuronsFor, utcDay, type Usage } from '../../shared/usage';
 import { AppError } from '../lib/errors';
+import { isAdminUser } from '../lib/owner';
 
 type PersonTotals = { email: string; neurons: number; questions: number };
 
 const DAY_MS = 24 * 3600_000;
 
-export function dailyBudget(env: Pick<Env, 'AI_DAILY_NEURON_BUDGET' | 'AI_USER_DAILY_SHARE'>) {
+export function dailyLimits(env: Pick<Env, 'AI_DAILY_NEURON_BUDGET' | 'AI_USER_DAILY_NEURONS'>) {
   const budget = Number(env.AI_DAILY_NEURON_BUDGET);
-  const share = Number(env.AI_USER_DAILY_SHARE);
-  const b = Number.isFinite(budget) && budget > 0 ? budget : 10_000;
-  const s = Number.isFinite(share) && share > 0 && share <= 1 ? share : 0.5;
-  return { budget: b, userLimit: Math.floor(b * s) };
+  const user = Number(env.AI_USER_DAILY_NEURONS);
+  return {
+    budget: Number.isFinite(budget) && budget > 0 ? budget : 10_000,
+    userLimit: Number.isFinite(user) && user > 0 ? user : 5_000,
+  };
 }
 
 /**
@@ -129,7 +131,7 @@ export async function buildUsage(
   nowMs = Date.now(),
 ): Promise<Usage> {
   const { day, start, resetsAt } = utcDay(nowMs);
-  const { budget, userLimit } = dailyBudget(env);
+  const { budget, userLimit } = dailyLimits(env);
   const weekStartMs = new Date(start).getTime() - 6 * DAY_MS;
   const weekStartDay = new Date(weekStartMs).toISOString().slice(0, 10);
 
@@ -145,7 +147,8 @@ export async function buildUsage(
     day,
     resetsAt,
     budget,
-    userLimit,
+    userLimit: isAdmin ? null : userLimit,
+    memberLimit: userLimit,
     you: { neurons: round(me?.neurons ?? 0), questions: me?.questions ?? 0 },
     // Cloudflare's analytics lag by a minute or so; never show less than this app alone used.
     account: account
@@ -154,7 +157,11 @@ export async function buildUsage(
   };
 
   if (isAdmin) {
-    usage.people = today.map((p) => ({ ...p, neurons: round(p.neurons) }));
+    usage.people = today.map((p) => ({
+      ...p,
+      neurons: round(p.neurons),
+      limit: isAdminUser(env, p.email) ? null : userLimit,
+    }));
     const history: NonNullable<Usage['history']> = [];
     for (let i = 0; i < 7; i++) {
       const dStart = new Date(weekStartMs + i * DAY_MS);
@@ -188,32 +195,28 @@ export function secondsUntilReset(nowMs = Date.now()) {
 }
 
 /**
- * Refuse a new question when this person has used their daily share, or the
- * account has used its daily budget (when the real account figure is known).
+ * Refuse a new question once a non-admin has used their daily neuron limit.
+ * Admins have no app-imposed cap: they can use the whole free allowance and
+ * any prepaid credits. When the account itself runs out, Workers AI refuses
+ * the call (error 4006), which the LLM adapter turns into ACCOUNT_AI_LIMIT.
  */
-export async function enforceDailyAiLimit(env: Env, userId: string, nowMs = Date.now()) {
-  const { day, start, resetsAt } = utcDay(nowMs);
-  const { budget, userLimit } = dailyBudget(env);
-  const [today, account] = await Promise.all([
-    appUsageByPerson(env.DB, start, resetsAt),
-    accountNeuronsByDay(env, day, day),
-  ]);
+export async function enforceDailyAiLimit(
+  env: Env,
+  userId: string,
+  isAdmin: boolean,
+  nowMs = Date.now(),
+) {
+  if (isAdmin) return;
+  const { start, resetsAt } = utcDay(nowMs);
+  const { userLimit } = dailyLimits(env);
+  const today = await appUsageByPerson(env.DB, start, resetsAt);
   const mine = today.find((p) => p.email === userId)?.neurons ?? 0;
-  const retryAfter = secondsUntilReset(nowMs);
   if (mine >= userLimit) {
     throw new AppError(
       429,
       'DAILY_AI_LIMIT',
-      "You've used your share of today's AI allowance. It resets at 00:00 UTC (5:30 AM IST).",
-      { retryAfter, resetsAt },
-    );
-  }
-  if ((account?.get(day) ?? 0) >= budget) {
-    throw new AppError(
-      429,
-      'ACCOUNT_AI_LIMIT',
-      "Today's AI allowance for the app is used up. It resets at 00:00 UTC (5:30 AM IST).",
-      { retryAfter, resetsAt },
+      "You've used today's AI allowance. It resets at 00:00 UTC (5:30 AM IST).",
+      { retryAfter: secondsUntilReset(nowMs), resetsAt },
     );
   }
 }

@@ -7,8 +7,12 @@ import { z } from 'zod';
 export const NEURON_RATES: Readonly<Record<string, { in: number; out: number }>> = {
   '@cf/openai/gpt-oss-120b': { in: 31_818, out: 68_182 },
   '@cf/openai/gpt-oss-20b': { in: 18_182, out: 27_273 },
-  // $0.30 / $1.20 per M tokens at $0.011 per 1,000 neurons.
+  // Others converted from $ per M tokens at $0.011 per 1,000 neurons.
   '@cf/deepseek-ai/deepseek-v4.1-flash-1017': { in: 27_273, out: 109_091 },
+  '@cf/qwen/qwen3.8-27b': { in: 40_909, out: 290_909 },
+  '@cf/nvidia/nemotron-3-120b-a12b': { in: 45_455, out: 136_364 },
+  '@cf/google/gemma-4-26b-a4b-it': { in: 9_091, out: 27_273 },
+  '@cf/moonshotai/kimi-k2.6': { in: 86_364, out: 363_636 },
 };
 
 /** Estimated neurons for one answer. Unknown models use gpt-oss-120b rates; the dev echo model is free. */
@@ -35,18 +39,20 @@ const PersonUsage = z.object({ email: z.string(), neurons: z.number(), questions
 export const UsageSchema = z.object({
   day: z.string(),
   resetsAt: z.string(),
-  /** Account-wide daily neuron budget (Workers AI free allowance unless configured otherwise). */
+  /** Account-wide daily neuron allowance (the Workers AI free allowance unless configured otherwise). */
   budget: z.number(),
-  /** Per-person daily share of the budget. */
-  userLimit: z.number(),
+  /** Your daily neuron limit; null for admins, who can use everything available (free + credits). */
+  userLimit: z.number().nullable(),
+  /** The daily limit for non-admin users. */
+  memberLimit: z.number(),
   you: PersonUsage.omit({ email: true }),
   account: z.object({
     neurons: z.number(),
     /** 'cloudflare': real account total from Cloudflare analytics; 'estimate': this app's users only. */
     source: z.enum(['cloudflare', 'estimate']),
   }),
-  /** Admins only: today's usage per person, highest first. */
-  people: z.array(PersonUsage).optional(),
+  /** Admins only: today's usage per person, highest first; limit null = admin (no cap). */
+  people: z.array(PersonUsage.extend({ limit: z.number().nullable() })).optional(),
   /** Admins only: last 7 UTC days, oldest first. */
   history: z
     .array(

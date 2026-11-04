@@ -9,3 +9,20 @@ export function untilReset(resetsAt: string, nowMs: number) {
   const m = mins % 60;
   return h ? `${h} h ${m} min` : `${m} min`;
 }
+
+type UsageLike = {
+  userLimit: number | null;
+  budget: number;
+  you: { neurons: number };
+  account: { neurons: number };
+};
+
+/**
+ * The percentage to show a person: their own use against their daily limit,
+ * or for admins (no cap) the whole app's use against the free allowance.
+ */
+export function headlinePercent(u: UsageLike) {
+  return u.userLimit === null
+    ? { percent: pct(u.account.neurons, u.budget), of: 'the free daily allowance (app total)' }
+    : { percent: pct(u.you.neurons, u.userLimit), of: 'your daily allowance' };
+}

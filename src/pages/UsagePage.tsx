@@ -28,9 +28,9 @@ export function UsagePage() {
       <div className="space-y-2">
         <h1 className="text-3xl font-bold">AI usage</h1>
         <p className="text-sm text-muted">
-          Answers use Cloudflare Workers AI, measured in neurons. The app has {fmt.format(u.budget)}{' '}
-          neurons a day; each person can use up to {fmt.format(u.userLimit)}. A typical answer uses
-          about 150–500.
+          Answers use Cloudflare Workers AI, measured in neurons. The free allowance is{' '}
+          {fmt.format(u.budget)} neurons a day. Family members can use up to{' '}
+          {fmt.format(u.memberLimit)} each; admins have no cap. A typical answer uses about 150–500.
         </p>
       </div>
 
@@ -60,7 +60,7 @@ export function UsagePage() {
                       Neurons
                     </th>
                     <th scope="col" className="px-3 py-2 text-right">
-                      Of their share
+                      Of their limit
                     </th>
                   </tr>
                 </thead>
@@ -73,7 +73,7 @@ export function UsagePage() {
                       <td className="px-3 py-2 text-right tabular-nums">{p.questions}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{fmt.format(p.neurons)}</td>
                       <td className="px-3 py-2 text-right tabular-nums">
-                        {pct(p.neurons, u.userLimit)}%
+                        {p.limit === null ? 'admin' : `${pct(p.neurons, p.limit)}%`}
                       </td>
                     </tr>
                   ))}

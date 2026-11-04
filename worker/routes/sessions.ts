@@ -117,7 +117,7 @@ export function sessionRoutes(llmFor: (env: Env) => LlmClient) {
           ? limitFor(c.env.RATE_LIMIT_QUESTIONS_PER_HOUR, 30)
           : limitFor(c.env.RATE_LIMIT_FAMILY_QUESTIONS_PER_HOUR, 10),
       );
-      await enforceDailyAiLimit(c.env, c.get('ownerId'));
+      await enforceDailyAiLimit(c.env, c.get('ownerId'), c.get('isAdmin'));
       if (await hasActiveAnswer(db, session.id)) {
         throw new AppError(409, 'ANSWER_IN_PROGRESS', 'Wait for the current answer to finish.');
       }

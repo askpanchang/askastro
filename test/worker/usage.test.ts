@@ -115,6 +115,10 @@ describe('GET /api/usage', () => {
     expect(mine.history).toBeUndefined();
 
     const all = UsageSchema.parse((await as(admin, '/api/usage', { overrides })).json());
+    expect(all.userLimit).toBeNull(); // admins have no app cap
+    expect(all.memberLimit).toBe(5_000);
+    expect(all.people?.find((p) => p.email === admin)?.limit).toBeNull();
+    expect(all.people?.find((p) => p.email === kid)?.limit).toBe(5_000);
     expect(all.people?.map((p) => p.email).filter((e) => e === admin || e === kid)).toEqual([
       admin,
       kid,
@@ -170,32 +174,29 @@ describe('daily AI limits', () => {
     expect(retry).toBeLessThanOrEqual(86_400);
   });
 
-  it('stops everyone when the account budget is used up', async () => {
-    const { kid, overrides, session } = await setup();
-    const s = await session(kid);
-    const today = utcDay(Date.now()).day;
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
-      Response.json({
-        data: {
-          viewer: {
-            accounts: [
-              {
-                aiInferenceAdaptiveGroups: [
-                  { sum: { totalNeurons: 10_001 }, dimensions: { date: today } },
-                ],
-              },
-            ],
+  it('never caps admins: they can use the whole allowance and any credits', async () => {
+    const { admin, overrides, session } = await setup();
+    const s = await session(admin);
+    await addAnswer(s.id, 300_000, 100_000); // ≈ 16,363 neurons, over the whole free allowance
+    const enc = new TextEncoder();
+    vi.spyOn(env.AI, 'run').mockImplementation(
+      (async () =>
+        new ReadableStream({
+          start(c) {
+            c.enqueue(
+              enc.encode('data: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n'),
+            );
+            c.close();
           },
-        },
-      }),
+        })) as unknown as typeof env.AI.run,
     );
-    const r = await as(kid, `/api/sessions/${s.id}/messages`, {
+    const r = await as(admin, `/api/sessions/${s.id}/messages`, {
       method: 'POST',
-      json: { question: 'Hi?' },
-      overrides: { ...overrides, CF_ANALYTICS_TOKEN: 'read-only' },
+      json: { question: 'Still fine?' },
+      overrides,
     });
-    expect(r.res.status).toBe(429);
-    expect(ApiErrorSchema.parse(r.json()).error.code).toBe('ACCOUNT_AI_LIMIT');
+    expect(r.res.status).toBe(200);
+    expect(r.text).toContain('event: done');
   });
 
   it('turns Cloudflare’s "daily allocation used" error into a friendly message', async () => {
