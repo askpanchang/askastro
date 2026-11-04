@@ -17,7 +17,8 @@
     "cf-typegen": "wrangler types --strict-vars=false",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
-    "check": "npm run typecheck && npm run lint && npm run format:check && npm run test"
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm run test",
+    "eval": "esbuild scripts/eval/run.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/eval/run.mjs --log-level=warning && node node_modules/.cache/eval/run.mjs"
   },
   "repository": {
     "type": "git",

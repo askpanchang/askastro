@@ -29,6 +29,9 @@ import { enforceHourlyLimit, limitFor } from '../lib/rateLimit';
 import { parseJson, parseValue } from '../lib/validate';
 import { enforceDailyAiLimit } from '../services/aiUsage';
 import { buildChartDigest } from '../services/chartDigest';
+import { correctionNote, factCheck } from '../services/factCheck';
+import { detectTopics, topicLines } from '../services/topics';
+import { fetchTransits } from '../services/transits';
 import { findDegeneration, type LlmClient } from '../services/llm';
 import { PROMPT_VERSION, buildPrompt, estimateTokens } from '../services/prompts';
 import type { KundaliRequest } from '../services/askpanchang';
@@ -130,10 +133,13 @@ export function sessionRoutes(llmFor: (env: Env) => LlmClient) {
       const req = JSON.parse(k.request_json) as KundaliRequest;
       const timeUncertain = k.time_uncertain === 1;
       const nowSec = Math.floor(Date.now() / 1000);
+      // Live transits (cached per day); the answer still works without them.
+      const transits = await fetchTransits(c.env, nowSec, data.info.ayan);
       const digest = buildChartDigest({
         data,
         timeUncertain,
         asOfSec: nowSec,
+        transits,
         profile: {
           name: req.bd.nm,
           gender: req.bd.g,
@@ -148,8 +154,14 @@ export function sessionRoutes(llmFor: (env: Env) => LlmClient) {
       const history = (await listMessages(db, session.id))
         .filter((m) => m.status === 'complete' && m.content)
         .map((m) => ({ role: m.role, content: m.content }));
+      const topicContext = topicLines(data, detectTopics(question), {
+        gender: req.bd.g,
+        tz: req.bd.tz,
+        asOfSec: nowSec,
+        transits,
+      }).join('\n');
       const messages = buildPrompt({
-        lang: session.lang,
+        topicContext,
         digest,
         today: new Date(nowSec * 1000).toISOString().slice(0, 10),
         timeUncertain,
@@ -235,6 +247,12 @@ export function sessionRoutes(llmFor: (env: Env) => LlmClient) {
               message: 'The model returned no answer. Try again.',
             });
           } else {
+            // Check stated lordships/signs/houses against the chart; append corrections.
+            const note = correctionNote(factCheck(text, data));
+            if (note) {
+              text += note;
+              await send('token', { text: note });
+            }
             await finishAnswer(db, assistantId, {
               content: text,
               status: 'complete',

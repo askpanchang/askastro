@@ -11,7 +11,6 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import { LANG_LABELS, LANGS } from '../../shared/kundali';
 import { STARTER_QUESTIONS, type Message, type Session } from '../../shared/session';
 import { ApiRequestError } from '../api/client';
 import { useKundali } from '../api/kundali';
@@ -294,23 +293,6 @@ function SessionHeader({ session, onOpenChart }: { session: Session; onOpenChart
         </h1>
       )}
       <div className="flex items-center gap-2">
-        <label htmlFor="session-lang-select" className="sr-only">
-          Answer language
-        </label>
-        <select
-          id="session-lang-select"
-          className={`${inputClass} w-auto py-1.5`}
-          value={session.lang}
-          onChange={(e) =>
-            update.mutate({ lang: e.target.value }, { onError: (err) => toast.error(err.message) })
-          }
-        >
-          {LANGS.map((l) => (
-            <option key={l} value={l}>
-              {LANG_LABELS[l]}
-            </option>
-          ))}
-        </select>
         <Button variant="secondary" className="lg:hidden" onClick={onOpenChart}>
           <ChartPieSlice size={16} aria-hidden />
           Chart

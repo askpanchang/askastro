@@ -3,8 +3,6 @@ import {
   AYANAMSA_LABELS,
   AYANAMSAS,
   CHART_STYLES,
-  LANG_LABELS,
-  LANGS,
   type KundaliOptions,
 } from '../../../shared/kundali';
 import { Button, inputClass } from '../ui';
@@ -36,7 +34,7 @@ export function GenerateKundaliForm({
         onSubmit(o);
       }}
     >
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1">
           <label htmlFor="ko-ayan" className="block text-sm font-medium">
             Ayanamsa
@@ -75,23 +73,6 @@ export function GenerateKundaliForm({
             ))}
           </div>
         </fieldset>
-        <div className="space-y-1">
-          <label htmlFor="ko-lang" className="block text-sm font-medium">
-            Q&amp;A language
-          </label>
-          <select
-            id="ko-lang"
-            className={inputClass}
-            value={o.lang}
-            onChange={(e) => setO({ ...o, lang: e.target.value as KundaliOptions['lang'] })}
-          >
-            {LANGS.map((l) => (
-              <option key={l} value={l}>
-                {LANG_LABELS[l]}
-              </option>
-            ))}
-          </select>
-        </div>
       </div>
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         {onCancel && (

@@ -20,6 +20,8 @@ import {
 import { allAntardashas, currentDasha, isoDateInZone, subPeriods } from '../../shared/dasha';
 import { AYANAMSA_LABELS, type AskPanchangKundali } from '../../shared/kundali';
 import { GENDER_LABELS, type Profile } from '../../shared/profile';
+import { chartFactLines } from './chartFacts';
+import { transitLines, type TransitSnapshot } from './transits';
 
 export type DigestInput = {
   data: AskPanchangKundali;
@@ -27,6 +29,8 @@ export type DigestInput = {
   timeUncertain: boolean;
   /** Reference time (Unix seconds) for "current" dasha, sade sati and transits. */
   asOfSec: number;
+  /** Live transits at question time; without them the generation-day snapshot is used. */
+  transits?: TransitSnapshot | null;
 };
 
 const sign = (code: number) => `${signName(code)} (${signSanskrit(code)})`;
@@ -48,6 +52,7 @@ export function buildChartDigest({
   profile,
   timeUncertain,
   asOfSec,
+  transits,
 }: DigestInput): string {
   const tz = profile.tz;
   const day = (sec: number) => isoDateInZone(sec, tz);
@@ -161,6 +166,9 @@ export function buildChartDigest({
     );
   }
 
+  /* Computed facts: lordships, aspects onto houses, karakas, Chalit, from Moon */
+  out.push(...chartFactLines(k));
+
   /* Aspects */
   if (k.aspects.length) {
     section('GRAHA DRISHTI (planet → planet, aspect number)');
@@ -250,8 +258,10 @@ export function buildChartDigest({
     );
   }
 
-  /* Transits at generation time */
-  if (k.transits.length) {
+  /* Transits: live at question time when available, else the generation-day snapshot */
+  if (transits) {
+    out.push(...transitLines(k, transits, tz, timeUncertain));
+  } else if (k.transits.length) {
     section('SLOW-PLANET TRANSITS (at chart generation; may have moved since)');
     out.push(
       k.transits

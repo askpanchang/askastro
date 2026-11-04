@@ -73,14 +73,16 @@ describe('buildPrompt', () => {
     expect(msgs[0]?.content).toContain('CHART DATA:\nDIGEST');
   });
 
-  it('covers the safety rules and language', () => {
-    const s = systemPrompt('te');
+  it('covers the safety rules, grounding and English-only answers', () => {
+    const s = systemPrompt();
     for (const rule of [
       'Never predict death',
       'qualified professional',
       'TIME-UNCERTAIN',
       'politely decline',
-      'Answer in Telugu',
+      'Answer in English',
+      'LORDSHIPS AND ROLES',
+      'TOPIC FOCUS',
     ]) {
       expect(s).toContain(rule);
     }

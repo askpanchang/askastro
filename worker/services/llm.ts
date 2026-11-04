@@ -1,3 +1,4 @@
+import { modelSettings } from '../../shared/models';
 import { SseParser } from '../../shared/sse';
 import { AppError } from '../lib/errors';
 
@@ -27,14 +28,15 @@ export class WorkersAiLlm implements LlmClient {
   }
 
   async *stream(messages: ChatMessage[], signal?: AbortSignal): AsyncIterable<LlmEvent> {
+    const settings = modelSettings(this.model);
     const input = {
       messages,
       stream: true,
       max_tokens: MAX_TOKENS,
-      // OpenAI recommends temperature 1.0 for gpt-oss; lower values caused
-      // repetition loops and leaked reasoning in live tests (Hindi especially).
-      temperature: 1,
-      reasoning_effort: 'medium',
+      // Per model: gpt-oss wants temperature 1.0 (lower values looped and leaked
+      // its chat template in live tests); reasoning levels differ by model.
+      temperature: settings.temperature,
+      ...(settings.reasoningEffort ? { reasoning_effort: settings.reasoningEffort } : {}),
       stream_options: { include_usage: true },
     };
     const options = this.env.AI_GATEWAY_ID ? { gateway: { id: this.env.AI_GATEWAY_ID } } : {};

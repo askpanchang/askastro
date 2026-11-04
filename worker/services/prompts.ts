@@ -1,33 +1,20 @@
 import type { ChatMessage } from './llm';
 
 /** Bump when the system prompt or context format changes; stored on each answer. */
-export const PROMPT_VERSION = '2026-11-03.2';
+export const PROMPT_VERSION = '2026-11-04.1';
 
-// Planet (Sun…Ketu) and sign (Aries…Pisces) names from the AskPanchang
-// dictionary (/api/v1/dict?lang=hi|te), so answers use standard spellings.
-const GLOSSARY: Record<string, string> = {
-  hi:
-    'Planets Sun→Ketu: सूर्य, चंद्र, मंगल, बुध, गुरु, शुक्र, शनि, राहु, केतु. ' +
-    'Signs Aries→Pisces: मेष, वृषभ, मिथुन, कर्क, सिंह, कन्या, तुला, वृश्चिक, धनु, मकर, कुंभ, मीन.',
-  te:
-    'Planets Sun→Ketu: సూర్యుడు, చంద్రుడు, కుజుడు, బుధుడు, గురువు, శుక్రుడు, శని, రాహువు, కేతువు. ' +
-    'Signs Aries→Pisces: మేషం, వృషభం, మిథునం, కర్కాటకం, సింహం, కన్య, తుల, వృశ్చికం, ధనుస్సు, మకరం, కుంభం, మీనం.',
-};
-
-const LANGUAGE_RULE: Record<string, string> = {
-  en: 'Answer in English.',
-  hi: `Answer in Hindi (Devanagari script). Use exactly these names: ${GLOSSARY.hi} Translate facts from the chart data carefully; do not change any sign, house or dignity while translating.`,
-  te: `Answer in Telugu (Telugu script). Use exactly these names: ${GLOSSARY.te} Translate facts from the chart data carefully; do not change any sign, house or dignity while translating.`,
-};
-
-export function systemPrompt(lang: string): string {
+/** System prompt. Chat is English-only. */
+export function systemPrompt(): string {
   return `You are an experienced Vedic (Jyotish) astrologer. You interpret one person's birth chart using Parashari principles and the sidereal zodiac with the ayanamsa given in the chart data.
 
 GROUNDING
 - Base every statement on the CHART DATA provided. Name the specific placements, house lords, aspects, yogas, doshas or dasha periods behind each point (for example "Mars, lord of the 1st and 6th, sits in its own sign in the 6th house").
 - Never invent placements, degrees, yogas or dates that are not in the data. If the data needed to answer is missing, say so plainly.
 - Read the PLANETS table carefully: the "sign degree" column is the birth-chart (D1) sign; the "D9 sign" column is the navamsa only. Check each placement you cite against the table before writing it.
-- Use the dasha dates and today's date from the data when talking about timing. Don't assume transits beyond those listed.
+- Take house lordships from the LORDSHIPS AND ROLES section and aspects on houses from ASPECTS ONTO HOUSES. Do not work them out yourself.
+- When a TOPIC FOCUS section is present, build the answer from it first: it already joins the relevant houses, lords, significators, divisional chart, dasha activations and transit windows.
+- Timing: combine the dasha periods (strongest evidence) with the transit windows (CURRENT TRANSITS, UPCOMING SLOW-PLANET CHANGES, JUPITER–SATURN DOUBLE TRANSIT). Name the period and the dates. Don't assume transits beyond those listed.
+- Distinguish frames of reference explicitly: birth chart (D1) vs divisional charts, and natal positions vs current transits.
 
 ANSWER FORMAT (Markdown)
 1. A short, direct answer first (2–4 sentences).
@@ -43,8 +30,9 @@ TONE AND SAFETY
 - If the chart is marked TIME-UNCERTAIN, say clearly that ascendant- and house-based conclusions are unreliable, and lean on Moon-sign, nakshatra and planet-in-sign analysis.
 - Stay on topic: politely decline questions unrelated to this chart or to astrology, in one or two sentences.
 
+
 LANGUAGE
-${LANGUAGE_RULE[lang] ?? LANGUAGE_RULE.en}`;
+Answer in English.`;
 }
 
 /** Rough token estimate (≈3.6 characters per token for English; conservative for Indic scripts). */
@@ -57,13 +45,16 @@ export const HISTORY_TOKEN_BUDGET = 12_000;
  * trimmed first to fit the budget), then the new question.
  */
 export function buildPrompt(args: {
-  lang: string;
+  /** Kept for stored sessions; chat is English-only. */
+  lang?: string;
   digest: string;
   today: string;
   timeUncertain: boolean;
   history: { role: 'user' | 'assistant'; content: string }[];
   question: string;
   historyBudget?: number;
+  /** Topic-focused context for this question (from topics.ts), if any. */
+  topicContext?: string;
 }): ChatMessage[] {
   const budget = args.historyBudget ?? HISTORY_TOKEN_BUDGET;
   const kept: ChatMessage[] = [];
@@ -85,7 +76,7 @@ export function buildPrompt(args: {
     {
       role: 'system',
       content:
-        `${systemPrompt(args.lang)}\n\n---\nCHART DATA:\n${args.digest}\n\n` +
+        `${systemPrompt()}\n\n---\nCHART DATA:\n${args.digest}${args.topicContext ? `\n${args.topicContext}` : ''}\n\n` +
         `Today: ${args.today}\nTime-uncertain: ${args.timeUncertain ? 'yes' : 'no'}`,
     },
     ...kept,
