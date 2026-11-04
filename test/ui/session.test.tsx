@@ -98,7 +98,8 @@ describe('session page', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Copy' })).toBeInTheDocument());
     // Model, token usage and time taken under the stored answer.
     expect(screen.getByLabelText('Answer details')).toHaveTextContent(
-      'DeepSeek V4.1 Flash · 2,415 in / 1,435 out tokens · 19.2 s',
+      // 2,415 × 27,273 + 1,435 × 109,091 per million ≈ 222 neurons.
+      'DeepSeek V4.1 Flash · 222 neurons · 19.2 s',
     );
     expect(screen.getAllByText('What does my current dasha indicate?')).toHaveLength(1);
     expect(screen.getByLabelText('Ask a question about this chart')).not.toBeDisabled();
