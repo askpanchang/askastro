@@ -44,7 +44,7 @@ function Bar({
   );
 }
 
-/** Full meters: your share and the account's daily budget, with the reset countdown. */
+/** Full meters: your share and (admins only) the account's daily budget, with the reset countdown. */
 export function UsageMeters({ usage }: { usage: Usage }) {
   const now = useTicker();
   return (
@@ -65,16 +65,18 @@ export function UsageMeters({ usage }: { usage: Usage }) {
           note={`${questions(usage.you.questions)} · resets daily`}
         />
       )}
-      <Bar
-        label="Whole app today (free allowance)"
-        used={usage.account.neurons}
-        limit={usage.budget}
-        note={
-          usage.account.source === 'cloudflare'
-            ? 'From Cloudflare: all AI use on the account.'
-            : "Estimate from this app's answers (account-wide figure not configured)."
-        }
-      />
+      {usage.userLimit === null && (
+        <Bar
+          label="Whole app today (free allowance)"
+          used={usage.account.neurons}
+          limit={usage.budget}
+          note={
+            usage.account.source === 'cloudflare'
+              ? 'From Cloudflare: all AI use on the account.'
+              : "Estimate from this app's answers (account-wide figure not configured)."
+          }
+        />
+      )}
       <p className="text-sm text-muted">
         Resets in {untilReset(usage.resetsAt, now)} (at {timeFmt.format(new Date(usage.resetsAt))}{' '}
         your time; 00:00 UTC).

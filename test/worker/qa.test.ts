@@ -149,6 +149,10 @@ describe('sessions', () => {
         ['user', 'complete', 'What does my current dasha indicate?'],
         ['assistant', 'complete', 'Jupiter mahadasha favours growth.'],
       ]);
+      // Answers carry their model and how long they took.
+      expect(d.messages[1]).toMatchObject({ model: env.AI_MODEL, tokensIn: 1234, tokensOut: 56 });
+      expect(d.messages[1]?.durationMs).toBeGreaterThanOrEqual(0);
+      expect(d.messages[0]).toMatchObject({ model: null, durationMs: null });
       expect(d.session.title).toBe('What does my current dasha indicate');
       expect(d.kundaliOutdated).toBe(false);
     });

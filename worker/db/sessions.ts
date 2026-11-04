@@ -20,6 +20,8 @@ type MessageRow = {
   status: Message['status'];
   tokens_in: number | null;
   tokens_out: number | null;
+  model: string | null;
+  completed_at: string | null;
   created_at: string;
 };
 
@@ -42,6 +44,11 @@ const toMessage = (r: MessageRow): Message => ({
   status: r.status,
   tokensIn: r.tokens_in,
   tokensOut: r.tokens_out,
+  model: r.role === 'assistant' ? r.model : null,
+  durationMs:
+    r.role === 'assistant' && r.completed_at
+      ? Math.max(0, Date.parse(r.completed_at) - Date.parse(r.created_at))
+      : null,
   createdAt: r.created_at,
 });
 
@@ -134,7 +141,7 @@ export async function softDeleteSession(db: D1Database, id: string) {
 export async function listMessages(db: D1Database, sessionId: string): Promise<Message[]> {
   const { results } = await db
     .prepare(
-      `SELECT id, role, content, status, tokens_in, tokens_out, created_at FROM qa_messages
+      `SELECT id, role, content, status, tokens_in, tokens_out, model, completed_at, created_at FROM qa_messages
        WHERE session_id = ? ORDER BY created_at, rowid`,
     )
     .bind(sessionId)
@@ -195,9 +202,9 @@ export async function finishAnswer(
 ) {
   await db
     .prepare(
-      'UPDATE qa_messages SET content = ?, status = ?, tokens_in = ?, tokens_out = ? WHERE id = ?',
+      'UPDATE qa_messages SET content = ?, status = ?, tokens_in = ?, tokens_out = ?, completed_at = ? WHERE id = ?',
     )
-    .bind(v.content, v.status, v.tokensIn, v.tokensOut, id)
+    .bind(v.content, v.status, v.tokensIn, v.tokensOut, nowIso(), id)
     .run();
 }
 

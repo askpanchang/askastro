@@ -28,9 +28,9 @@ export function UsagePage() {
       <div className="space-y-2">
         <h1 className="text-3xl font-bold">AI usage</h1>
         <p className="text-sm text-muted">
-          Answers use Cloudflare Workers AI, measured in neurons. The free allowance is{' '}
-          {fmt.format(u.budget)} neurons a day. Family members can use up to{' '}
-          {fmt.format(u.memberLimit)} each; admins have no cap. A typical answer uses about 150–500.
+          {u.userLimit === null
+            ? `Answers use Cloudflare Workers AI, measured in neurons. The free allowance is ${fmt.format(u.budget)} neurons a day. Family members can use up to ${fmt.format(u.memberLimit)} each; admins have no cap. A typical answer uses about 150–500.`
+            : `Answers are measured in neurons. You can use up to ${fmt.format(u.userLimit)} a day; a typical answer uses about 150–500.`}
         </p>
       </div>
 
