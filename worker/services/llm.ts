@@ -46,7 +46,15 @@ export class WorkersAiLlm implements LlmClient {
         input,
         options,
       );
-    } catch {
+    } catch (err) {
+      // Free plan: Workers AI refuses calls once the daily neuron allowance is used (error 4006).
+      if (/\b4006\b|daily free allocation|neurons/i.test(err instanceof Error ? err.message : '')) {
+        throw new AppError(
+          429,
+          'ACCOUNT_AI_LIMIT',
+          "Today's AI allowance for the app is used up. It resets at 00:00 UTC (5:30 AM IST).",
+        );
+      }
       throw new AppError(502, 'AI_UPSTREAM_ERROR', 'The AI model is unavailable right now.');
     }
     if (!(body instanceof ReadableStream)) {

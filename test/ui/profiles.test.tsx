@@ -149,7 +149,10 @@ describe('profile form', () => {
     expect(screen.getByLabelText('Time zone (IANA)')).toHaveValue('Asia/Kolkata');
 
     fireEvent.click(screen.getByRole('button', { name: 'Create profile' }));
-    await waitFor(() => expect(router.state.location.pathname).toBe(`/profiles/${PROFILE.id}`));
+    // Generous timeout: under the full parallel suite, save + navigate can exceed 1 s.
+    await waitFor(() => expect(router.state.location.pathname).toBe(`/profiles/${PROFILE.id}`), {
+      timeout: 5000,
+    });
     expect(posted).toEqual({
       name: 'Arjun Sharma',
       gender: 'm',

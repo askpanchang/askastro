@@ -7,6 +7,8 @@ declare namespace Cloudflare {
     ACCESS_AUD?: string;
     /** Comma-separated admin emails; set as a secret in production only. */
     ADMIN_EMAILS?: string;
+    /** Read-only Cloudflare API token (Account Analytics: Read) for account-wide AI usage. */
+    CF_ANALYTICS_TOKEN?: string;
   }
 }
 
@@ -23,4 +25,6 @@ interface Env {
   ACCESS_AUD?: string;
   /** Comma-separated admin emails; set as a secret in production only. */
   ADMIN_EMAILS?: string;
+  /** Read-only Cloudflare API token (Account Analytics: Read) for account-wide AI usage. */
+  CF_ANALYTICS_TOKEN?: string;
 }

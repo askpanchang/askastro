@@ -38,6 +38,14 @@
     "RATE_LIMIT_KUNDALIS_PER_HOUR": "20",
     // Non-admin (family) users: questions per hour.
     "RATE_LIMIT_FAMILY_QUESTIONS_PER_HOUR": "10",
+    // Workers AI free allowance in neurons per day (reset 00:00 UTC), shown on
+    // the Usage page. Admins have no app cap (free allowance + any credits);
+    // everyone else gets AI_USER_DAILY_NEURONS per day.
+    "AI_DAILY_NEURON_BUDGET": "10000",
+    "AI_USER_DAILY_NEURONS": "5000",
+    // For the account-wide usage figure (Cloudflare GraphQL analytics). Needs the
+    // CF_ANALYTICS_TOKEN secret (Account Analytics: Read only); else an estimate.
+    "CF_ACCOUNT_ID": "2f209d94239e556224c9f71e6775cf36",
   },
   // Served only on kundali-studio.askpanchang.workers.dev, which Cloudflare
   // Access protects. Preview URLs would be extra, unprotected hostnames.
