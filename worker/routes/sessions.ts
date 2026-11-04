@@ -33,6 +33,7 @@ import { correctionNote, factCheck } from '../services/factCheck';
 import { detectTopics, topicLines } from '../services/topics';
 import { fetchTransits, transitSignSets } from '../services/transits';
 import { findDegeneration, type LlmClient } from '../services/llm';
+import { activeModel } from '../services/modelChoice';
 import { PROMPT_VERSION, buildPrompt, estimateTokens } from '../services/prompts';
 import type { KundaliRequest } from '../services/askpanchang';
 import type { AppEnv } from '../types';
@@ -58,7 +59,7 @@ async function readOptionalJson(req: { text(): Promise<string> }): Promise<unkno
   }
 }
 
-export function sessionRoutes(llmFor: (env: Env) => LlmClient) {
+export function sessionRoutes(llmFor: (env: Env, model: string) => LlmClient) {
   return new Hono<AppEnv>()
     .get('/profiles/:id/sessions', async (c) => {
       const ownerId = c.get('ownerId');
@@ -78,7 +79,7 @@ export function sessionRoutes(llmFor: (env: Env) => LlmClient) {
         profileId: profile.id,
         kundaliId: latest.id,
         title: DEFAULT_SESSION_TITLE,
-        model: c.env.AI_MODEL,
+        model: await activeModel(c.env),
         lang: body.lang ?? latest.lang,
       });
       const session = await getSession(c.env.DB, ownerId, id);
@@ -169,23 +170,24 @@ export function sessionRoutes(llmFor: (env: Env) => LlmClient) {
         question,
       });
 
+      // The admin's current pick; each answer records its own model.
+      const model = await activeModel(c.env);
       const { userId, assistantId } = await insertQuestionAndPlaceholder(
         db,
         session.id,
         question,
         PROMPT_VERSION,
+        model,
       );
       await updateSession(db, session.id, {
-        // Answers come from the configured model; keep the session's record (used
-        // for usage estimates) in step if it was created under another model.
-        model: session.model !== c.env.AI_MODEL ? c.env.AI_MODEL : undefined,
+        model: session.model !== model ? model : undefined,
         title:
           session.messageCount === 0 && session.title === DEFAULT_SESSION_TITLE
             ? titleFromQuestion(question)
             : undefined,
       });
 
-      const llm = llmFor(c.env);
+      const llm = llmFor(c.env, model);
       const encoder = new TextEncoder();
       const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
       const writer = writable.getWriter();

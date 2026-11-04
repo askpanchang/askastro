@@ -9,6 +9,7 @@ import { geocodeRoutes } from './routes/geocode';
 import { kundaliRoutes } from './routes/kundali';
 import { sessionRoutes } from './routes/sessions';
 import { profiles } from './routes/profiles';
+import { settings } from './routes/settings';
 import { buildUsage } from './services/aiUsage';
 import { AskPanchangClient, type KundaliClient } from './services/askpanchang';
 import type { Geocoder } from './services/geocoder';
@@ -18,7 +19,8 @@ import type { AppEnv } from './types';
 export type AppDeps = {
   geocoder?: Geocoder;
   kundaliClient?: (env: Env) => KundaliClient;
-  llm?: (env: Env) => LlmClient;
+  /** Builds the client for the model picked for this answer (see services/modelChoice). */
+  llm?: (env: Env, model: string) => LlmClient;
 };
 
 export function createApp(deps: AppDeps = {}) {
@@ -61,13 +63,14 @@ export function createApp(deps: AppDeps = {}) {
     c.json(await buildUsage(c.env, c.get('ownerId'), c.get('isAdmin'))),
   );
   api.route('/profiles', profiles);
+  api.route('/settings', settings);
   api.route('/geocode', geocodeRoutes(deps.geocoder));
   api.route('/', kundaliRoutes(deps.kundaliClient ?? ((env) => new AskPanchangClient(env))));
   api.route(
     '/',
     sessionRoutes(
       deps.llm ??
-        ((env) => (env.AI_MODEL === 'dev:echo' ? new DevEchoLlm() : new WorkersAiLlm(env))),
+        ((env, model) => (model === 'dev:echo' ? new DevEchoLlm() : new WorkersAiLlm(env, model))),
     ),
   );
 

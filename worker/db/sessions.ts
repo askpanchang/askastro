@@ -160,6 +160,7 @@ export async function insertQuestionAndPlaceholder(
   sessionId: string,
   question: string,
   promptVersion: string,
+  model: string,
 ) {
   const userId = newId();
   const assistantId = newId();
@@ -174,10 +175,10 @@ export async function insertQuestionAndPlaceholder(
       .bind(userId, sessionId, question, at(t)),
     db
       .prepare(
-        `INSERT INTO qa_messages (id, session_id, role, content, status, prompt_version, created_at)
-         VALUES (?, ?, 'assistant', '', 'streaming', ?, ?)`,
+        `INSERT INTO qa_messages (id, session_id, role, content, status, prompt_version, model, created_at)
+         VALUES (?, ?, 'assistant', '', 'streaming', ?, ?, ?)`,
       )
-      .bind(assistantId, sessionId, promptVersion, at(t + 1)),
+      .bind(assistantId, sessionId, promptVersion, model, at(t + 1)),
   ]);
   return { userId, assistantId };
 }

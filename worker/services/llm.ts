@@ -23,8 +23,11 @@ const MAX_TOKENS = 4096;
 export class WorkersAiLlm implements LlmClient {
   readonly model: string;
 
-  constructor(private readonly env: Pick<Env, 'AI' | 'AI_MODEL' | 'AI_GATEWAY_ID'>) {
-    this.model = env.AI_MODEL;
+  constructor(
+    private readonly env: Pick<Env, 'AI' | 'AI_MODEL' | 'AI_GATEWAY_ID'>,
+    model: string = env.AI_MODEL,
+  ) {
+    this.model = model;
   }
 
   async *stream(messages: ChatMessage[], signal?: AbortSignal): AsyncIterable<LlmEvent> {
@@ -39,7 +42,11 @@ export class WorkersAiLlm implements LlmClient {
       ...(settings.reasoningEffort ? { reasoning_effort: settings.reasoningEffort } : {}),
       stream_options: { include_usage: true },
     };
-    const options = this.env.AI_GATEWAY_ID ? { gateway: { id: this.env.AI_GATEWAY_ID } } : {};
+    // Paid models go through AI Gateway (Unified billing = prepaid credits). Free
+    // models call Workers AI directly so they use the free daily allowance
+    // instead of credits.
+    const options =
+      settings.paid && this.env.AI_GATEWAY_ID ? { gateway: { id: this.env.AI_GATEWAY_ID } } : {};
     let body: unknown;
     try {
       // The model id is configuration, so the per-model typings can't be used here.

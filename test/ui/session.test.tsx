@@ -71,8 +71,13 @@ describe('session page', () => {
     });
     renderApp(`/sessions/${SESSION.id}`);
 
+    // The session page is a lazy route: allow for a slow first load on CI.
     fireEvent.click(
-      await screen.findByRole('button', { name: 'What does my current dasha indicate?' }),
+      await screen.findByRole(
+        'button',
+        { name: 'What does my current dasha indicate?' },
+        { timeout: 5000 },
+      ),
     );
     // First token is rendered as Markdown while streaming; input is locked.
     expect(await screen.findByText('Jupiter', { selector: 'strong' })).toBeInTheDocument();

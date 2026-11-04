@@ -52,16 +52,16 @@ No Cloudflare login? Run `npm run dev:local`. Everything works except real AI an
 
 ## Configuration
 
-| Name                   | Kind               | Required | Purpose                           |
-| ---------------------- | ------------------ | -------- | --------------------------------- |
-| `DB`                   | D1 binding         | yes      | Data                              |
-| `AI`                   | Workers AI binding | yes      | LLM                               |
-| `APP_NAME`             | var                | yes      | Display name                      |
-| `ASKPANCHANG_API_BASE` | var                | yes      | Kundali API base URL              |
-| `ASKPANCHANG_API_KEY`  | secret             | no       | Sent as a header if set           |
-| `AI_MODEL`             | var                | yes      | Workers AI model ID               |
-| `AI_GATEWAY_ID`        | var                | no       | Route AI calls through AI Gateway |
-| `ACCESS_AUD`           | var                | no       | Verify the Cloudflare Access JWT  |
+| Name                   | Kind               | Required | Purpose                                                              |
+| ---------------------- | ------------------ | -------- | -------------------------------------------------------------------- |
+| `DB`                   | D1 binding         | yes      | Data                                                                 |
+| `AI`                   | Workers AI binding | yes      | LLM                                                                  |
+| `APP_NAME`             | var                | yes      | Display name                                                         |
+| `ASKPANCHANG_API_BASE` | var                | yes      | Kundali API base URL                                                 |
+| `ASKPANCHANG_API_KEY`  | secret             | no       | Sent as a header if set                                              |
+| `AI_MODEL`             | var                | yes      | Default Workers AI model ID (admins can switch on the Settings page) |
+| `AI_GATEWAY_ID`        | var                | no       | Route AI calls through AI Gateway                                    |
+| `ACCESS_AUD`           | var                | no       | Verify the Cloudflare Access JWT                                     |
 
 Secrets go in `.dev.vars` locally (git-ignored) and `wrangler secret put <NAME>` in production.
 

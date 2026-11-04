@@ -17,7 +17,7 @@ export function dailyLimits(env: Pick<Env, 'AI_DAILY_NEURON_BUDGET' | 'AI_USER_D
 
 /**
  * This app's AI usage per person between two instants, from stored answers:
- * neurons are estimated from each answer's token counts and its session's model.
+ * neurons are estimated from each answer's token counts and the model that wrote it.
  */
 export async function appUsageByPerson(
   db: D1Database,
@@ -26,13 +26,13 @@ export async function appUsageByPerson(
 ): Promise<PersonTotals[]> {
   const { results } = await db
     .prepare(
-      `SELECT s.owner_id AS email, s.model AS model,
+      `SELECT s.owner_id AS email, COALESCE(m.model, s.model) AS model,
          SUM(CASE WHEN m.role = 'assistant' THEN COALESCE(m.tokens_in, 0) ELSE 0 END) AS tin,
          SUM(CASE WHEN m.role = 'assistant' THEN COALESCE(m.tokens_out, 0) ELSE 0 END) AS tout,
          SUM(CASE WHEN m.role = 'user' THEN 1 ELSE 0 END) AS questions
        FROM qa_messages m JOIN qa_sessions s ON s.id = m.session_id
        WHERE m.created_at >= ? AND m.created_at < ?
-       GROUP BY s.owner_id, s.model`,
+       GROUP BY s.owner_id, COALESCE(m.model, s.model)`,
     )
     .bind(fromIso, toIso)
     .all<{ email: string; model: string; tin: number; tout: number; questions: number }>();
