@@ -39,6 +39,9 @@ export const MessageSchema = z.object({
   status: z.enum(['complete', 'streaming', 'error']),
   tokensIn: z.number().nullable(),
   tokensOut: z.number().nullable(),
+  /** Answers only: the model that wrote it and how long it took (ms). */
+  model: z.string().nullish(),
+  durationMs: z.number().nullish(),
   createdAt: z.string(),
 });
 export type Message = z.infer<typeof MessageSchema>;

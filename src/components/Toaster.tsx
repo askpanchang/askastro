@@ -1,5 +1,14 @@
 import { CheckCircle, WarningCircle, X } from '@phosphor-icons/react';
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 
 type Toast = { id: number; kind: 'success' | 'error'; message: string };
 type ToastApi = { success: (m: string) => void; error: (m: string) => void };
@@ -9,6 +18,15 @@ let nextId = 1;
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  // Auto-dismiss timers, cleared on unmount so none fire after the app is gone.
+  const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
+  useEffect(() => {
+    const pending = timers.current;
+    return () => {
+      pending.forEach(clearTimeout);
+      pending.clear();
+    };
+  }, []);
 
   const dismiss = useCallback((id: number) => {
     setToasts((ts) => ts.filter((t) => t.id !== id));
@@ -18,7 +36,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     (kind: Toast['kind'], message: string) => {
       const id = nextId++;
       setToasts((ts) => [...ts.slice(-3), { id, kind, message }]);
-      setTimeout(() => dismiss(id), kind === 'error' ? 7000 : 4000);
+      const timer = setTimeout(
+        () => {
+          timers.current.delete(timer);
+          dismiss(id);
+        },
+        kind === 'error' ? 7000 : 4000,
+      );
+      timers.current.add(timer);
     },
     [dismiss],
   );

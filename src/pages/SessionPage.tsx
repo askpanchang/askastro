@@ -26,6 +26,7 @@ import { BackLink } from '../components/BackLink';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { KundaliSummary } from '../components/kundali/KundaliSummary';
 import { Markdown } from '../components/qa/Markdown';
+import { answerMeta } from '../lib/answerMeta';
 import { useToast } from '../components/Toaster';
 import { UsageLine, UsageMeters } from '../components/UsageMeter';
 import { usageKey, useUsage } from '../api/usage';
@@ -326,7 +327,12 @@ function SessionHeader({ session, onOpenChart }: { session: Session; onOpenChart
   );
 }
 
-function MessageBubble({ message }: { message: Pick<Message, 'role' | 'content' | 'status'> }) {
+function MessageBubble({
+  message,
+}: {
+  message: Pick<Message, 'role' | 'content' | 'status'> &
+    Partial<Pick<Message, 'model' | 'tokensIn' | 'tokensOut' | 'durationMs'>>;
+}) {
   const toast = useToast();
   if (message.role === 'user') {
     return (
@@ -367,16 +373,21 @@ function MessageBubble({ message }: { message: Pick<Message, 'role' | 'content' 
           This answer could not be completed. Ask again to retry.
         </p>
       )}
-      {message.status === 'complete' && message.content && (
-        <div className="mt-2 flex justify-end">
-          <button
-            type="button"
-            onClick={() => void copy()}
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted hover:bg-surface-2 hover:text-text"
-          >
-            <Copy size={14} aria-hidden />
-            Copy
-          </button>
+      {message.status !== 'streaming' && (answerMeta(message) || message.content) && (
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-muted tabular-nums" aria-label="Answer details">
+            {answerMeta(message)}
+          </p>
+          {message.status === 'complete' && message.content && (
+            <button
+              type="button"
+              onClick={() => void copy()}
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted hover:bg-surface-2 hover:text-text"
+            >
+              <Copy size={14} aria-hidden />
+              Copy
+            </button>
+          )}
         </div>
       )}
     </li>

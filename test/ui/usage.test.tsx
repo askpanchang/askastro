@@ -25,9 +25,10 @@ describe('usage page', () => {
       'aria-valuenow',
       '82',
     );
+    // The app-wide meter is for admins only.
     expect(
-      screen.getByRole('progressbar', { name: 'Whole app today (free allowance)' }),
-    ).toHaveAttribute('aria-valuenow', '60');
+      screen.queryByRole('progressbar', { name: 'Whole app today (free allowance)' }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText(/Resets in 3 h 1[12] min/)).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Today by person' })).not.toBeInTheDocument();
     // Header pill warns at 80%+.
@@ -64,6 +65,9 @@ describe('usage page', () => {
     expect(
       screen.queryByRole('progressbar', { name: 'Your AI use today' }),
     ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('progressbar', { name: 'Whole app today (free allowance)' }),
+    ).toHaveAttribute('aria-valuenow', '60');
     // Admin's header pill shows the whole app against the free allowance.
     expect(
       screen.getByRole('link', { name: 'AI usage: 60% of the free daily allowance (app total)' }),

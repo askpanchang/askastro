@@ -61,7 +61,16 @@ describe('session page', () => {
             c.enqueue(enc.encode(sseEvent('token', { text: '**Jupiter** ' })));
             await gate;
             c.enqueue(enc.encode(sseEvent('token', { text: 'brings growth.' })));
-            stored = [msg('user', question, 1), msg('assistant', '**Jupiter** brings growth.', 2)];
+            stored = [
+              msg('user', question, 1),
+              {
+                ...msg('assistant', '**Jupiter** brings growth.', 2),
+                model: '@cf/deepseek-ai/deepseek-v4.1-flash-1017',
+                tokensIn: 2415,
+                tokensOut: 1435,
+                durationMs: 19_240,
+              },
+            ];
             c.enqueue(enc.encode(sseEvent('done', { messageId: 'a', tokensIn: 1, tokensOut: 2 })));
             c.close();
           },
@@ -87,6 +96,10 @@ describe('session page', () => {
     release();
     await waitFor(() => expect(screen.getByText(/brings growth\./)).toBeInTheDocument());
     await waitFor(() => expect(screen.getByRole('button', { name: 'Copy' })).toBeInTheDocument());
+    // Model, token usage and time taken under the stored answer.
+    expect(screen.getByLabelText('Answer details')).toHaveTextContent(
+      'DeepSeek V4.1 Flash · 2,415 in / 1,435 out tokens · 19.2 s',
+    );
     expect(screen.getAllByText('What does my current dasha indicate?')).toHaveLength(1);
     expect(screen.getByLabelText('Ask a question about this chart')).not.toBeDisabled();
   });
