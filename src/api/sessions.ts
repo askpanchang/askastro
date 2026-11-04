@@ -80,6 +80,14 @@ export function useDeleteSession(profileId: string) {
   });
 }
 
+/** Ask the server to stop the session's running answer (it saves what it has). */
+export async function stopAnswer(sessionId: string): Promise<void> {
+  await fetch(`/api/sessions/${sessionId}/stop`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+  });
+}
+
 export type StreamResult =
   | { status: 'done'; messageId: string }
   | { status: 'error'; code: string; message: string }

@@ -19,6 +19,8 @@ import {
   insertSession,
   latestKundaliId,
   listMessages,
+  requestStop,
+  saveProgress,
   listSessions,
   softDeleteSession,
   updateSession,
@@ -42,6 +44,12 @@ import { requireProfile } from './profiles';
 
 const notFound = () => new AppError(404, 'SESSION_NOT_FOUND', 'Session not found');
 export const STOPPED_NOTE = '\n\n_(Answer stopped before it finished.)_';
+export const streamTiming = {
+  /** Send an SSE comment when nothing was sent for this long. */
+  heartbeatMs: 5_000,
+  /** How often a running answer is saved and checked for Stop. */
+  saveEveryMs: 2_000,
+};
 
 async function requireSession(db: D1Database, ownerId: string, id: string) {
   if (!isId(id)) throw notFound();
@@ -109,6 +117,10 @@ export function sessionRoutes(llmFor: (env: Env, model: string) => LlmClient) {
       const session = await requireSession(c.env.DB, c.get('ownerId'), c.req.param('id'));
       await softDeleteSession(c.env.DB, session.id);
       return c.json({ ok: true as const });
+    })
+    .post('/sessions/:id/stop', async (c) => {
+      const session = await requireSession(c.env.DB, c.get('ownerId'), c.req.param('id'));
+      return c.json({ ok: true as const, stopping: await requestStop(c.env.DB, session.id) });
     })
     .post('/sessions/:id/messages', async (c) => {
       const db = c.env.DB;
@@ -206,16 +218,23 @@ export function sessionRoutes(llmFor: (env: Env, model: string) => LlmClient) {
       const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
       const writer = writable.getWriter();
       const abort = new AbortController();
+      // A dropped connection doesn't end the answer: it keeps going and is saved,
+      // and the chat picks it up again by polling. Only an explicit Stop
+      // (POST /api/sessions/:id/stop) ends it early.
       let clientGone = false;
-      const send = async (event: string, payload: unknown) => {
+      let stopped = false;
+      let lastSent = Date.now();
+      const write = async (chunk: string) => {
         if (clientGone) return;
         try {
-          await writer.write(encoder.encode(sseEvent(event, payload)));
+          await writer.write(encoder.encode(chunk));
+          lastSent = Date.now();
         } catch {
-          clientGone = true; // client disconnected or pressed Stop
-          abort.abort();
+          clientGone = true;
         }
       };
+      const send = (event: string, payload: unknown) => write(sseEvent(event, payload));
+      let lastSaved = Date.now();
 
       const work = (async () => {
         let text = '';
@@ -224,6 +243,19 @@ export function sessionRoutes(llmFor: (env: Env, model: string) => LlmClient) {
         try {
           await send('start', { userMessageId: userId, messageId: assistantId });
           for await (const ev of llm.stream(messages, abort.signal)) {
+            // Keep the connection alive while the model reasons silently (~20 s for
+            // DeepSeek): idle streams can be dropped by browsers and networks.
+            if (Date.now() - lastSent >= streamTiming.heartbeatMs) await write(': ping\n\n');
+            // Every couple of seconds: save progress and check for Stop.
+            if (Date.now() - lastSaved >= streamTiming.saveEveryMs) {
+              lastSaved = Date.now();
+              if ((await saveProgress(db, assistantId, text)).stopRequested) {
+                stopped = true;
+                abort.abort();
+                break;
+              }
+            }
+            if (ev.type === 'thinking') continue;
             if (ev.type === 'token') {
               text += ev.text;
               // Check the recent tail only, so long answers stay cheap to scan.
@@ -243,17 +275,17 @@ export function sessionRoutes(llmFor: (env: Env, model: string) => LlmClient) {
               tokensIn = Math.max(tokensIn ?? 0, ev.tokensIn);
               tokensOut = Math.max(tokensOut ?? 0, ev.tokensOut);
             }
-            if (clientGone) break;
           }
           tokensIn ??= messages.reduce((n, m) => n + estimateTokens(m.content), 0);
           tokensOut ??= estimateTokens(text);
-          if (clientGone) {
+          if (stopped) {
             await finishAnswer(db, assistantId, {
-              content: text ? text + STOPPED_NOTE : '',
-              status: text ? 'complete' : 'error',
+              content: text.trim() ? text.trimEnd() + STOPPED_NOTE : '',
+              status: text.trim() ? 'complete' : 'error',
               tokensIn,
               tokensOut,
             });
+            await send('done', { messageId: assistantId, tokensIn, tokensOut });
           } else if (!text.trim()) {
             await finishAnswer(db, assistantId, {
               content: '',

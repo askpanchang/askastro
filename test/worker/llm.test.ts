@@ -21,7 +21,7 @@ async function collect(it: AsyncIterable<LlmEvent>) {
 }
 
 describe('parseModelStream', () => {
-  it('reads OpenAI chunks split across reads, ignoring reasoning and stopping at [DONE]', async () => {
+  it('reads OpenAI chunks split across reads, flagging reasoning and stopping at [DONE]', async () => {
     const sse =
       'data: {"choices":[{"delta":{"reasoning_content":"thinking"}}]}\n\n' +
       'data: {"choices":[{"delta":{"content":"Hello"}}]}\n\n' +
@@ -30,6 +30,7 @@ describe('parseModelStream', () => {
       'data: [DONE]\n\n' +
       'data: {"choices":[{"delta":{"content":"ignored"}}]}\n\n';
     expect(await collect(parseModelStream(streamOf(sse)))).toEqual([
+      { type: 'thinking' }, // reasoning text itself is never shown
       { type: 'token', text: 'Hello' },
       { type: 'token', text: ' world' },
       { type: 'usage', tokensIn: 10, tokensOut: 2 },
