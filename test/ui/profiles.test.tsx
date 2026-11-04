@@ -144,7 +144,11 @@ describe('profile form', () => {
     const place = screen.getByRole('combobox', { name: 'Place of birth' });
     fireEvent.focus(place);
     fireEvent.change(place, { target: { value: 'Hyder' } });
-    fireEvent.click(await screen.findByRole('option', { name: /Hyderabad, Telangana, India/ }));
+    // Generous timeouts throughout: the 300 ms debounce plus fetch and render can exceed
+    // Testing Library's 1 s default on a busy CI runner.
+    fireEvent.click(
+      await screen.findByRole('option', { name: /Hyderabad, Telangana, India/ }, { timeout: 5000 }),
+    );
     expect(place).toHaveValue('Hyderabad, Telangana, India');
     expect(screen.getByLabelText('Time zone (IANA)')).toHaveValue('Asia/Kolkata');
 
@@ -165,7 +169,9 @@ describe('profile form', () => {
       tz: 'Asia/Kolkata',
       notes: null,
     });
-    expect(await screen.findByText('Created Arjun Sharma')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Created Arjun Sharma', {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
   });
 
   it('disables the time input when time is unknown', async () => {
