@@ -31,6 +31,7 @@ import { enforceDailyAiLimit } from '../services/aiUsage';
 import { buildChartDigest } from '../services/chartDigest';
 import { correctionNote, factCheck } from '../services/factCheck';
 import { detectTopics, topicLines } from '../services/topics';
+import { detectHorizon, fetchPeriodEvents, periodLines } from '../services/periods';
 import { fetchTransits, transitSignSets } from '../services/transits';
 import { findDegeneration, type LlmClient } from '../services/llm';
 import { activeModel } from '../services/modelChoice';
@@ -155,12 +156,25 @@ export function sessionRoutes(llmFor: (env: Env, model: string) => LlmClient) {
       const history = (await listMessages(db, session.id))
         .filter((m) => m.status === 'complete' && m.content)
         .map((m) => ({ role: m.role, content: m.content }));
-      const topicContext = topicLines(data, detectTopics(question), {
-        gender: req.bd.g,
-        tz: req.bd.tz,
-        asOfSec: nowSec,
-        transits,
-      }).join('\n');
+      // Week / month / year forecasts get dasha periods and transit tables for the range.
+      const horizon = detectHorizon(question);
+      const periodEvents = horizon ? await fetchPeriodEvents(c.env, nowSec, horizon) : null;
+      const topicContext = [
+        ...topicLines(data, detectTopics(question), {
+          gender: req.bd.g,
+          tz: req.bd.tz,
+          asOfSec: nowSec,
+          transits,
+        }),
+        ...(horizon
+          ? periodLines(data, horizon, {
+              tz: req.bd.tz,
+              nowSec,
+              transits,
+              events: periodEvents,
+            })
+          : []),
+      ].join('\n');
       const messages = buildPrompt({
         topicContext,
         digest,
@@ -253,7 +267,16 @@ export function sessionRoutes(llmFor: (env: Env, model: string) => LlmClient) {
             });
           } else {
             // Check stated lordships/signs/houses against the chart; append corrections.
-            const note = correctionNote(factCheck(text, data, transitSignSets(transits)));
+            const note = correctionNote(
+              factCheck(text, data, transitSignSets(transits, periodEvents ?? []), {
+                events: [
+                  ...(transits?.events ?? []),
+                  ...(transits?.week ?? []),
+                  ...(periodEvents ?? []),
+                ],
+                tz: req.bd.tz,
+              }),
+            );
             if (note) {
               text += note;
               await send('token', { text: note });

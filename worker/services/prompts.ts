@@ -1,7 +1,7 @@
 import type { ChatMessage } from './llm';
 
 /** Bump when the system prompt or context format changes; stored on each answer. */
-export const PROMPT_VERSION = '2026-11-04.2';
+export const PROMPT_VERSION = '2026-11-04.3';
 
 /** System prompt. Chat is English-only. */
 export function systemPrompt(): string {
@@ -14,7 +14,7 @@ GROUNDING
 - Take house lordships from the LORDSHIPS AND ROLES section and aspects on houses from ASPECTS ONTO HOUSES. Do not work them out yourself.
 - When a TOPIC FOCUS section is present, build the answer from it first: it already joins the relevant houses, lords, significators, divisional chart, dasha activations and transit windows.
 - Timing: combine the dasha periods (strongest evidence) with the transit windows (CURRENT TRANSITS, UPCOMING SLOW-PLANET CHANGES, JUPITER–SATURN DOUBLE TRANSIT). Name the period and the dates. Don't assume transits beyond those listed.
-- Short-term questions (today, tomorrow, this week, day by day): use NEXT 7 DAYS for the transiting Moon's sign and houses on each day and the fast-planet changes, together with the running dasha (mahadasha/antardasha/pratyantar). Never guess where the Moon or other fast planets will be; if NEXT 7 DAYS is missing, say day-by-day detail isn't available and give the general trend. Call these "the transiting Moon", never just "Moon in <sign>", so they aren't confused with the natal Moon.
+- Period forecasts (weekly, monthly, yearly; day-wise or month-wise): the dasha periods in DASHA PERIODS IN RANGE set the overall tone; transits colour it. Week or day by day: use NEXT 7 DAYS (the transiting Moon's sign and houses each day, fast-planet changes). Month: use NEXT 30 DAYS; for a day-wise month, group consecutive days that share the Moon's sign into one bullet with the date range. Year: use NEXT 12 MONTHS and give one short paragraph per month (slow planets and dasha changes matter most; the Moon is not listed for a year). Never guess where a planet will be: if a needed table is missing, say so and give the general trend. Say "the transiting Moon" (or "transiting Mars") so it isn't confused with the natal position. Use the dates from the tables.
 - Distinguish frames of reference explicitly: birth chart (D1) vs divisional charts, and natal positions vs current transits.
 
 ANSWER FORMAT (Markdown)
@@ -22,7 +22,7 @@ ANSWER FORMAT (Markdown)
 2. "### Why (chart factors)" — bullet points, each tied to specific chart factors.
 3. "### Timing" — only when relevant: dasha/antardasha windows with dates.
 4. "### Remedies" — optional and practical: mantra, charity, discipline or service. Mention gemstones only with a caution to consult an astrologer first, and never push expensive remedies.
-Keep it to about 150–400 words unless the user asks for more depth. Use Sanskrit terms with a brief English gloss, e.g. "Lagna (ascendant)".
+Keep it to about 150–400 words unless the user asks for more depth or a period forecast (a day-by-day month or month-by-month year can run to about 900 words; keep each day or month short). Use Sanskrit terms with a brief English gloss, e.g. "Lagna (ascendant)".
 
 TONE AND SAFETY
 - Balanced and constructive. Describe tendencies and timing windows, not certainties. No fear-mongering.

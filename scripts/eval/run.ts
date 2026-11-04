@@ -18,6 +18,7 @@ import { factCheck } from '../../worker/services/factCheck';
 import { parseModelStream } from '../../worker/services/llm';
 import { buildPrompt } from '../../worker/services/prompts';
 import { detectTopics, topicLines } from '../../worker/services/topics';
+import { detectHorizon, fetchPeriodEvents, periodLines } from '../../worker/services/periods';
 import { fetchTransits, transitSignSets } from '../../worker/services/transits';
 import { CASES, CHARTS } from './cases';
 
@@ -73,7 +74,7 @@ async function ask(model: string, messages: { role: string; content: string }[])
       body: JSON.stringify({
         messages,
         stream: true,
-        max_tokens: 4096,
+        max_tokens: 8192,
         temperature: s.temperature,
         ...(s.reasoningEffort ? { reasoning_effort: s.reasoningEffort } : {}),
         stream_options: { include_usage: true },
@@ -102,33 +103,44 @@ function loadChart(meta: (typeof CHARTS)[string]) {
 }
 
 /** Re-score saved answers with the current grader and fact-checker (no model calls). */
-function regrade(file: string, transitSigns: Map<number, Set<number>>): Result[] {
+async function regrade(file: string, transits: Awaited<ReturnType<typeof fetchTransits>>) {
   const saved = JSON.parse(readFileSync(file, 'utf8')) as Result[];
-  return saved.map((r) => {
+  const out: Result[] = [];
+  for (const r of saved) {
     const c = CASES.find((x) => x.id === r.case);
-    if (!c) return r;
-    const k = loadChart(CHARTS[c.chart]!);
+    if (!c) {
+      out.push(r);
+      continue;
+    }
+    const meta = CHARTS[c.chart]!;
+    const k = loadChart(meta);
     const checks = c.checks(k, nowSec);
     const failed = checks.filter((ch) => !ch.pass(r.answer)).map((ch) => ch.name);
-    const found = factCheck(r.answer, k, transitSigns);
+    const horizon = detectHorizon(c.question);
+    const periodEvents = horizon ? await fetchPeriodEvents(env as Env, nowSec, horizon) : null;
+    const found = factCheck(r.answer, k, transitSignSets(transits, periodEvents ?? []), {
+      events: [...(transits?.events ?? []), ...(transits?.week ?? []), ...(periodEvents ?? [])],
+      tz: meta.tz,
+    });
     for (const f of found)
       console.log(`  ${modelSettings(r.model).label} / ${r.case}: "${f.claim}" → ${f.correction}`);
-    return {
+    out.push({
       ...r,
       passed: checks.length - failed.length,
       total: checks.length,
       failed,
       errors: found.length,
       issues: found.map((i) => i.correction),
-    };
-  });
+    });
+  }
+  return out;
 }
 
 async function main() {
   mkdirSync(outDir, { recursive: true });
   const regradeFile = arg('regrade');
   const results: Result[] = regradeFile
-    ? regrade(regradeFile, transitSignSets(await fetchTransits(env as Env, nowSec, 'lahiri')))
+    ? await regrade(regradeFile, await fetchTransits(env as Env, nowSec, 'lahiri'))
     : [];
   if (regradeFile) {
     report(results, [...new Set(results.map((r) => r.model))]);
@@ -158,12 +170,19 @@ async function main() {
           tz: meta.tz,
         },
       });
-      const topicContext = topicLines(k, detectTopics(c.question), {
-        gender: meta.gender,
-        tz: meta.tz,
-        asOfSec: nowSec,
-        transits,
-      }).join('\n');
+      const horizon = detectHorizon(c.question);
+      const periodEvents = horizon ? await fetchPeriodEvents(env as Env, nowSec, horizon) : null;
+      const topicContext = [
+        ...topicLines(k, detectTopics(c.question), {
+          gender: meta.gender,
+          tz: meta.tz,
+          asOfSec: nowSec,
+          transits,
+        }),
+        ...(horizon
+          ? periodLines(k, horizon, { tz: meta.tz, nowSec, transits, events: periodEvents })
+          : []),
+      ].join('\n');
       const messages = buildPrompt({
         digest,
         today: new Date(nowSec * 1000).toISOString().slice(0, 10),
@@ -176,7 +195,10 @@ async function main() {
         const a = await ask(model, messages);
         const checks = c.checks(k, nowSec);
         const failed = checks.filter((ch) => !ch.pass(a.text)).map((ch) => ch.name);
-        const issues = factCheck(a.text, k, transitSignSets(transits)).map((i) => i.correction);
+        const issues = factCheck(a.text, k, transitSignSets(transits, periodEvents ?? []), {
+          events: [...(transits?.events ?? []), ...(transits?.week ?? []), ...(periodEvents ?? [])],
+          tz: meta.tz,
+        }).map((i) => i.correction);
         results.push({
           model,
           case: c.id,

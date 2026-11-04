@@ -113,7 +113,7 @@ export async function fetchTransits(
   }
 }
 
-const houseFrom = (sign: number, fromSign: number) => ((sign - fromSign + 12) % 12) + 1;
+export const houseFrom = (sign: number, fromSign: number) => ((sign - fromSign + 12) % 12) + 1;
 
 /** Sign occupancy intervals for one planet over the timeline window. */
 export function signIntervals(
@@ -166,13 +166,19 @@ export function doubleTransitWindows(
 
 const EVENT_LABEL: Record<string, string> = { retro: 'turns retrograde', direct: 'turns direct' };
 
-/** A fast planet's sign at `atSec`, from today's position and the week's sign changes. */
-export function signAt(snap: TransitSnapshot, planet: number, atSec: number): number | null {
+/**
+ * A planet's sign at `atSec`, from today's position and sign-change events
+ * (default: this week's fast-planet events).
+ */
+export function signAt(
+  snap: TransitSnapshot,
+  planet: number,
+  atSec: number,
+  events: TransitEvent[] = snap.week ?? [],
+): number | null {
   const now = snap.planets.find((p) => p.p === planet);
   if (!now) return null;
-  const changes = (snap.week ?? []).filter(
-    (e) => e.p === planet && e.typ === 'rashi' && e.to !== undefined,
-  );
+  const changes = events.filter((e) => e.p === planet && e.typ === 'rashi' && e.to !== undefined);
   if (atSec >= snap.asOfSec) {
     let sign = now.r;
     for (const e of changes) if (e.dt > snap.asOfSec && e.dt <= atSec) sign = e.to!;
@@ -217,8 +223,11 @@ export function weekLines(
   snap: TransitSnapshot,
   tz: string,
   todaySec: number,
+  opts: { days?: number; events?: TransitEvent[]; title?: string } = {},
 ): string[] {
-  if (!snap.week?.length) return [];
+  const events = opts.events ?? snap.week ?? [];
+  const days = opts.days ?? 7;
+  if (!events.length) return [];
   const lagna = k.info.lagna;
   const moon = k.info.rashi;
   const dayFmt = new Intl.DateTimeFormat('en-GB', {
@@ -237,12 +246,12 @@ export function weekLines(
     `${signName(sign)} (H${houseFrom(sign, lagna)} from Lagna, H${houseFrom(sign, moon)} from Moon)`;
   const out = ['', `## NEXT 7 DAYS (transiting Moon each day; times in ${tz})`];
   let start = localMidnight(todaySec, tz);
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < days; i++) {
     // Next local midnight (robust to DST: step 26 h, then snap back to midnight).
     const end = localMidnight(start + 26 * 3600, tz);
-    const first = signAt(snap, 2, start);
+    const first = signAt(snap, 2, start, events);
     if (first === null) return [];
-    const changes = snap.week.filter(
+    const changes = events.filter(
       (e) => e.p === 2 && e.typ === 'rashi' && e.to !== undefined && e.dt >= start && e.dt < end,
     );
     out.push(
@@ -254,7 +263,7 @@ export function weekLines(
     start = end;
   }
   const horizon = start;
-  const others = snap.week.filter(
+  const others = events.filter(
     (e) => e.p !== 2 && e.dt >= localMidnight(todaySec, tz) && e.dt < horizon,
   );
   for (const e of others) {
@@ -326,11 +335,14 @@ export function transitLines(
 }
 
 /** Signs each planet occupies now, this week or during the timeline (for the fact-checker). */
-export function transitSignSets(snap: TransitSnapshot | null): Map<number, Set<number>> {
+export function transitSignSets(
+  snap: TransitSnapshot | null,
+  extra: TransitEvent[] = [],
+): Map<number, Set<number>> {
   const out = new Map<number, Set<number>>();
   if (!snap) return out;
   for (const p of snap.planets) out.set(p.p, new Set([p.r]));
-  for (const e of [...snap.events, ...(snap.week ?? [])]) {
+  for (const e of [...snap.events, ...(snap.week ?? []), ...extra]) {
     if (e.typ === 'rashi' && e.to !== undefined) {
       const set = out.get(e.p) ?? new Set<number>();
       set.add(e.to);

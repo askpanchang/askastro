@@ -1,6 +1,8 @@
 import { ordinal, planetName, signName } from '../../shared/astro';
+import { isoDateInZone } from '../../shared/dasha';
 import type { AskPanchangKundali } from '../../shared/kundali';
 import { lordships } from './chartFacts';
+import type { TransitEvent } from './transits';
 
 /**
  * Deterministic fact-check of an answer against the chart: house lordships,
@@ -69,7 +71,7 @@ const ORD_LIST = String.raw`${ORD}(?:\s*(?:,|and|&|/)\s*(?:the\s+)?${ORD})?`;
  * correct: transits (incl. day-by-day forecasts), the Moon chart, vargas.
  */
 const OTHER_FRAME =
-  /\b(transit|transits|transiting|gochar|currently|right now|enters|entering|moves? into|will move|will be in|today|tonight|tomorrow|this week|next week|mon|tue|wed|thu|fri|sat|sun(?=\s*\d)|monday|tuesday|wednesday|thursday|friday|saturday|sunday|day \d|\d{4}-\d{2}-\d{2}|\d{1,2} (?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]* \d{1,2}|from the moon|from moon|chandra lagna|moon chart|navamsa|navamsha|d-?9|d-?10|dasamsa|d-?\d{1,2}\b|varga|chalit|from the sun|from venus|from jupiter|in the [a-z]+ chart|sade sati|panoti|dhaiya|ashtama shani)\b|→|->/i;
+  /\b(transit|transits|transiting|gochar|currently|right now|enters|entering|moves? into|will move|will be in|today|tonight|tomorrow|this week|next week|this month|next month|this year|next year|january|february|march|april|june|july|august|september|october|november|december|mon|tue|wed|thu|fri|sat|sun(?=\s*\d)|monday|tuesday|wednesday|thursday|friday|saturday|sunday|day \d|\d{4}-\d{2}-\d{2}|\d{1,2} (?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]* \d{1,2}|from the moon|from moon|chandra lagna|moon chart|navamsa|navamsha|d-?9|d-?10|dasamsa|d-?\d{1,2}\b|varga|chalit|from the sun|from venus|from jupiter|in the [a-z]+ chart|sade sati|panoti|dhaiya|ashtama shani)\b|→|->/i;
 
 /** Strip Markdown and normalise hyphen variants (models often use U+2011 "‑"). */
 const clean = (s: string) =>
@@ -83,10 +85,37 @@ const clean = (s: string) =>
  * A claim that a planet is "in" one of those is ambiguous (likely about the
  * transit), so it isn't flagged.
  */
+const MONTH_NAMES = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+const MON = String.raw`jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?`;
+const INGRESS = new RegExp(
+  String.raw`\b(${P})\b\s+(?:enters|moves (?:in)?to|shifts (?:in)?to|ingresses into|re-?enters|returns to|retrogrades (?:back )?into)\s+(${S})\b((?:(?!\b(?:${P})\b)[^.;\n]){0,40}?)\b(?:on\s+)?(?:(\d{1,2})(?:st|nd|rd|th)?\s+(${MON})\b|(${MON})\s+(\d{1,2})\b)`,
+  'gi',
+);
+
+/**
+ * `timing`: sign-change events from the transit data. "Sun enters Scorpio on
+ * 16 Dec" is flagged when the data has the Sun entering Scorpio only on other
+ * dates (more than 2 days away).
+ */
 export function factCheck(
   answer: string,
   k: AskPanchangKundali,
   transitSigns?: Map<number, Set<number>>,
+  timing?: { events: TransitEvent[]; tz: string },
 ): FactIssue[] {
   const lords = lordships(k);
   const sign = new Map(k.pl.map((p) => [p.p, p.r]));
@@ -107,6 +136,7 @@ export function factCheck(
 
   const sentences = clean(answer).split(/(?<=[.!?;])\s+|\n+|\s\|\s/);
   for (const s of sentences) {
+    if (timing) checkIngressDates(s, timing);
     if (!s.trim() || OTHER_FRAME.test(s)) continue;
 
     // "Venus, lord of the 7th and 12th" / "Venus (lord of the 2nd)"
@@ -165,6 +195,36 @@ export function factCheck(
     }
   }
   return issues;
+
+  function checkIngressDates(s: string, t: { events: TransitEvent[]; tz: string }) {
+    for (const m of s.matchAll(INGRESS)) {
+      const planet = PLANETS[m[1]!.toLowerCase()]!;
+      const to = SIGNS[m[2]!.toLowerCase()]!;
+      const day = Number(m[4] ?? m[7]);
+      const month = MONTHS.indexOf((m[5] ?? m[6])!.slice(0, 3).toLowerCase());
+      if (month < 0 || day < 1 || day > 31) continue;
+      const actual = t.events.filter((e) => e.p === planet && e.typ === 'rashi' && e.to === to);
+      if (!actual.length) continue; // outside the data's range: can't tell
+      const dates = actual.map((e) => isoDateInZone(e.dt, t.tz));
+      const close = dates.some((d) => {
+        const [y, mo, dd] = d.split('-').map(Number) as [number, number, number];
+        const at = Date.UTC(y, mo - 1, dd);
+        return [y - 1, y, y + 1].some(
+          (yy) => Math.abs(Date.UTC(yy, month, day) - at) <= 2 * 86_400_000,
+        );
+      });
+      if (!close) {
+        const fmt = (d: string) => {
+          const [y, mo, dd] = d.split('-').map(Number) as [number, number, number];
+          return `${dd} ${MONTH_NAMES[mo - 1]} ${y}`;
+        };
+        add(
+          m[0],
+          `${planetName(planet)} enters ${signName(to)} on ${[...new Set(dates)].map(fmt).join(' and ')}, not ${day} ${MONTH_NAMES[month]}.`,
+        );
+      }
+    }
+  }
 
   function checkLord(claim: string, planet: number, nums: (string | undefined)[]) {
     if (planet === 8 || planet === 9) {

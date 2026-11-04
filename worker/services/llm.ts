@@ -13,7 +13,7 @@ export interface LlmClient {
 }
 
 /** Answer budget. gpt-oss counts reasoning tokens against max_tokens too. */
-const MAX_TOKENS = 4096;
+const MAX_TOKENS = 8192; // room for reasoning plus a month- or year-long forecast
 
 /**
  * Workers AI chat-completions adapter, verified for @cf/openai/gpt-oss-120b

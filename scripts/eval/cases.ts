@@ -369,4 +369,46 @@ export const CASES: Case[] = [
       ];
     },
   },
+  {
+    id: 'priya-month',
+    chart: 'priya',
+    question: 'Give me monthly predictions for the next 30 days, day wise.',
+    checks: () => [
+      {
+        name: 'covers the month with dates',
+        pass: (a) =>
+          new Set(
+            norm(a).match(
+              /\b\d{1,2}(?=\s*(?:[-–]\s*\d{1,2}\s*)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))/gi,
+            ),
+          ).size >= 8,
+      },
+      {
+        name: 'frames the Moon as transiting',
+        pass: has(/transit(ing)? moon|moon(['’]s)? transit|gochar/i),
+      },
+    ],
+  },
+  {
+    id: 'arjun-year',
+    chart: 'arjun',
+    question:
+      'What does the next year look like? Give a yearly summary with month wise predictions.',
+    checks: () => [
+      {
+        name: 'covers 12 months',
+        pass: (a) =>
+          new Set(
+            norm(a)
+              .match(/\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b/gi)
+              ?.map((m) => m.slice(0, 3).toLowerCase()),
+          ).size >= 12,
+      },
+      {
+        name: 'uses Saturn and Jupiter transits',
+        pass: (a) => /saturn/i.test(a) && /jupiter/i.test(a),
+      },
+      { name: 'names dasha periods', pass: has(/antardasha|pratyantar|\bAD\b|\bPD\b/i) },
+    ],
+  },
 ];
