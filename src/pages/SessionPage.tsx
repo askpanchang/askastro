@@ -17,6 +17,7 @@ import { useKundali } from '../api/kundali';
 import { useProfile } from '../api/profiles';
 import {
   sessionKeys,
+  stopAnswer,
   streamAnswer,
   useDeleteSession,
   useSession,
@@ -41,7 +42,9 @@ export function SessionPage() {
   const detail = useSession(id);
 
   if (detail.isPending) return <Spinner label="Loading session…" />;
-  if (detail.isError) {
+  // A failed background refresh must not replace the chat (that would cancel a
+  // running answer); only show the error when there is nothing to show.
+  if (detail.isError && !detail.data) {
     return (
       <div className="space-y-4">
         <BackLink to="/">Profiles</BackLink>
@@ -77,7 +80,23 @@ function SessionView({
   const endRef = useRef<HTMLDivElement>(null);
   const stickRef = useRef(true);
 
-  const streaming = pending?.state === 'streaming';
+  // An answer is being written: by this page's request, or server-side after a
+  // dropped connection or reload (the session then polls until it settles).
+  const serverStreaming = messages.some((m) => m.status === 'streaming');
+  const streaming = pending?.state === 'streaming' || serverStreaming;
+  // While this page streams, hide the stored copy of the same question and answer.
+  const shown =
+    pending && messages.at(-1)?.status === 'streaming' ? messages.slice(0, -2) : messages;
+
+  const stop = useCallback(async () => {
+    try {
+      await stopAnswer(session.id);
+    } catch {
+      // Offline: the answer finishes server-side and is still saved.
+    }
+    abortRef.current?.abort();
+    await qc.invalidateQueries({ queryKey: sessionKeys.detail(session.id) });
+  }, [qc, session.id]);
 
   // Follow new tokens unless the reader has scrolled up.
   useEffect(() => {
@@ -117,7 +136,9 @@ function SessionView({
           toast.error(err.message);
           return;
         }
-        toast.error('The connection dropped. The answer may still be saved; reload to check.');
+        toast.error(
+          'The connection dropped. The answer is still being written and will appear here.',
+        );
       } finally {
         abortRef.current = null;
       }
@@ -150,7 +171,7 @@ function SessionView({
 
         <h2 className="sr-only">Conversation</h2>
         <ol className="space-y-4" aria-label="Conversation">
-          {messages.map((m) => (
+          {shown.map((m) => (
             <MessageBubble key={m.id} message={m} />
           ))}
           {pending && (
@@ -190,7 +211,7 @@ function SessionView({
           onChange={setDraft}
           streaming={streaming}
           onSend={() => void ask(draft)}
-          onStop={() => abortRef.current?.abort()}
+          onStop={() => void stop()}
         />
       </section>
 

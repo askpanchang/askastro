@@ -4,7 +4,10 @@ import { AppError } from '../lib/errors';
 
 export type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
 export type LlmEvent =
-  { type: 'token'; text: string } | { type: 'usage'; tokensIn: number; tokensOut: number };
+  | { type: 'token'; text: string }
+  | { type: 'usage'; tokensIn: number; tokensOut: number }
+  /** The model is reasoning (text not shown); lets the caller keep the connection alive. */
+  | { type: 'thinking' };
 
 /** Everything model-specific lives behind this interface (BUILD_PROMPT §7.3). */
 export interface LlmClient {
@@ -116,15 +119,24 @@ export async function* parseModelStream(
 
 type Chunk = {
   response?: unknown;
-  choices?: { delta?: { content?: unknown }; text?: unknown }[];
+  choices?: {
+    delta?: { content?: unknown; reasoning_content?: unknown; reasoning?: unknown };
+    text?: unknown;
+  }[];
   usage?: { prompt_tokens?: number; completion_tokens?: number } | null;
 };
 
 function* chunkEvents(json: unknown): Iterable<LlmEvent> {
   const c = json as Chunk;
   // OpenAI chat.completion.chunk: answer text in delta.content; reasoning is ignored.
-  const delta = c.choices?.[0]?.delta?.content ?? c.choices?.[0]?.text;
+  const d = c.choices?.[0]?.delta;
+  const delta = d?.content ?? c.choices?.[0]?.text;
   if (typeof delta === 'string' && delta) yield { type: 'token', text: delta };
+  else if (
+    (typeof d?.reasoning_content === 'string' && d.reasoning_content) ||
+    (typeof d?.reasoning === 'string' && d.reasoning)
+  )
+    yield { type: 'thinking' };
   // Legacy Workers AI format.
   if (typeof c.response === 'string' && c.response) yield { type: 'token', text: c.response };
   if (c.usage && typeof c.usage.prompt_tokens === 'number') {

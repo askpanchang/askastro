@@ -88,7 +88,7 @@ async function ask(model: string, messages: { role: string; content: string }[])
   let tout = 0;
   for await (const ev of parseModelStream(res.body as ReadableStream<Uint8Array>)) {
     if (ev.type === 'token') text += ev.text;
-    else {
+    else if (ev.type === 'usage') {
       tin = Math.max(tin, ev.tokensIn);
       tout = Math.max(tout, ev.tokensOut);
     }

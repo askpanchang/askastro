@@ -41,7 +41,11 @@ const toMessage = (r: MessageRow): Message => ({
   id: r.id,
   role: r.role,
   content: r.content,
-  status: r.status,
+  // Abandoned answers show as failed instead of spinning forever.
+  status:
+    r.status === 'streaming' && Date.now() - Date.parse(r.created_at) > STALE_ANSWER_MS
+      ? 'error'
+      : r.status,
   tokensIn: r.tokens_in,
   tokensOut: r.tokens_out,
   model: r.role === 'assistant' ? r.model : null,
@@ -150,8 +154,11 @@ export async function listMessages(db: D1Database, sessionId: string): Promise<M
 }
 
 /** True if an answer is being written in this session (ignoring rows stuck for > 5 min). */
+/** An answer still "streaming" after this long was abandoned (the Worker was stopped). */
+export const STALE_ANSWER_MS = 5 * 60_000;
+
 export async function hasActiveAnswer(db: D1Database, sessionId: string): Promise<boolean> {
-  const cutoff = new Date(Date.now() - 5 * 60_000).toISOString();
+  const cutoff = new Date(Date.now() - STALE_ANSWER_MS).toISOString();
   const row = await db
     .prepare(
       `SELECT 1 FROM qa_messages WHERE session_id = ? AND status = 'streaming' AND created_at > ? LIMIT 1`,
@@ -206,6 +213,31 @@ export async function finishAnswer(
     )
     .bind(v.content, v.status, v.tokensIn, v.tokensOut, nowIso(), id)
     .run();
+}
+
+/**
+ * Save the partial answer (so a reopened chat shows progress) and report
+ * whether the user pressed Stop.
+ */
+export async function saveProgress(db: D1Database, id: string, content: string) {
+  const row = await db
+    .prepare(
+      `UPDATE qa_messages SET content = ? WHERE id = ? AND status = 'streaming' RETURNING stop_requested`,
+    )
+    .bind(content, id)
+    .first<{ stop_requested: number }>();
+  return { stopRequested: row?.stop_requested === 1 };
+}
+
+/** Ask the session's running answer to stop. Returns whether one was running. */
+export async function requestStop(db: D1Database, sessionId: string) {
+  const r = await db
+    .prepare(
+      `UPDATE qa_messages SET stop_requested = 1 WHERE session_id = ? AND status = 'streaming'`,
+    )
+    .bind(sessionId)
+    .run();
+  return (r.meta.changes ?? 0) > 0;
 }
 
 export async function getKundaliForSession(db: D1Database, kundaliId: string) {

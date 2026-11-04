@@ -9,6 +9,7 @@ import {
   SessionResponseSchema,
 } from '../../shared/session';
 import { SseParser } from '../../shared/sse';
+import { STOPPED_NOTE, streamTiming } from '../../worker/routes/sessions';
 import { PROMPT_VERSION } from '../../worker/services/prompts';
 import fixture from '../fixtures/askpanchang-sample.json';
 import { ARJUN, api, freshOwner } from './helpers';
@@ -306,5 +307,100 @@ describe('sessions', () => {
     const input = run.mock.calls[0]![1] as { messages: { content: string }[] };
     expect(input.messages[0]?.content).toContain('Time-uncertain: yes');
     expect(input.messages[0]?.content).toContain('TIME-UNCERTAIN');
+  });
+});
+
+describe('dropped connections and Stop', () => {
+  const defaults = { ...streamTiming };
+  afterEach(() => Object.assign(streamTiming, defaults));
+
+  /** Reasoning chunks, then answer parts; waits on `gate` before part `pauseAt`. */
+  function gatedStream(parts: string[], pauseAt: number, gate: Promise<void>) {
+    const enc = new TextEncoder();
+    const chunk = (delta: Record<string, string>) =>
+      enc.encode(`data: ${JSON.stringify({ choices: [{ delta }] })}\n\n`);
+    let i = 0;
+    return new ReadableStream<Uint8Array>({
+      async pull(ctrl) {
+        if (i < 3) ctrl.enqueue(chunk({ reasoning_content: 'thinking…' }));
+        else if (i - 3 < parts.length) {
+          if (i - 3 === pauseAt) await gate;
+          ctrl.enqueue(chunk({ content: parts[i - 3]! }));
+        } else {
+          ctrl.enqueue(enc.encode('data: [DONE]\n\n'));
+          ctrl.close();
+        }
+        i++;
+      },
+    });
+  }
+
+  async function readUntil(reader: ReadableStreamDefaultReader<Uint8Array>, needle: string) {
+    const dec = new TextDecoder();
+    let text = '';
+    while (!text.includes(needle)) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      text += dec.decode(value, { stream: true });
+    }
+    return text;
+  }
+
+  const answerRow = (sessionId: string) =>
+    env.DB.prepare(
+      "SELECT status, content FROM qa_messages WHERE session_id = ? AND role = 'assistant'",
+    )
+      .bind(sessionId)
+      .first<{ status: string; content: string }>();
+
+  it('keeps writing and saves the full answer when the connection drops', async () => {
+    const owner = freshOwner();
+    const { session } = await setup(owner);
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    mockAi(() => gatedStream(['Married life ', 'is stable ', 'and warm.'], 1, gate));
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('no', { status: 503 }));
+
+    const res = await api(`/api/sessions/${session.id}/messages`, {
+      method: 'POST',
+      owner,
+      json: { question: 'How will be my married life?' },
+    });
+    const reader = res.body!.getReader();
+    await readUntil(reader, 'Married life');
+    await reader.cancel(); // the phone dropped the connection
+    release();
+
+    await vi.waitFor(async () => expect((await answerRow(session.id))?.status).toBe('complete'), {
+      timeout: 5000,
+    });
+    expect((await answerRow(session.id))?.content).toBe('Married life is stable and warm.');
+  });
+
+  it('Stop ends the answer, keeps what was written, and pings while thinking', async () => {
+    Object.assign(streamTiming, { heartbeatMs: 0, saveEveryMs: 0 });
+    const owner = freshOwner();
+    const { session } = await setup(owner);
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    mockAi(() => gatedStream(['Part one. ', 'Part two.'], 1, gate));
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('no', { status: 503 }));
+
+    const res = await api(`/api/sessions/${session.id}/messages`, {
+      method: 'POST',
+      owner,
+      json: { question: 'What does my current dasha indicate?' },
+    });
+    const reader = res.body!.getReader();
+    const head = await readUntil(reader, 'Part one.');
+    expect(head).toContain(': ping');
+
+    const stop = await api(`/api/sessions/${session.id}/stop`, { method: 'POST', owner });
+    expect(await stop.json()).toEqual({ ok: true, stopping: true });
+    release();
+    await readUntil(reader, 'event: done');
+
+    const row = await answerRow(session.id);
+    expect(row).toEqual({ status: 'complete', content: `Part one.${STOPPED_NOTE}` });
   });
 });
