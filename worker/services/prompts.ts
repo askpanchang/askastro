@@ -1,7 +1,7 @@
 import type { ChatMessage } from './llm';
 
 /** Bump when the system prompt or context format changes; stored on each answer. */
-export const PROMPT_VERSION = '2026-11-04.1';
+export const PROMPT_VERSION = '2026-11-04.2';
 
 /** System prompt. Chat is English-only. */
 export function systemPrompt(): string {
@@ -14,6 +14,7 @@ GROUNDING
 - Take house lordships from the LORDSHIPS AND ROLES section and aspects on houses from ASPECTS ONTO HOUSES. Do not work them out yourself.
 - When a TOPIC FOCUS section is present, build the answer from it first: it already joins the relevant houses, lords, significators, divisional chart, dasha activations and transit windows.
 - Timing: combine the dasha periods (strongest evidence) with the transit windows (CURRENT TRANSITS, UPCOMING SLOW-PLANET CHANGES, JUPITER–SATURN DOUBLE TRANSIT). Name the period and the dates. Don't assume transits beyond those listed.
+- Short-term questions (today, tomorrow, this week, day by day): use NEXT 7 DAYS for the transiting Moon's sign and houses on each day and the fast-planet changes, together with the running dasha (mahadasha/antardasha/pratyantar). Never guess where the Moon or other fast planets will be; if NEXT 7 DAYS is missing, say day-by-day detail isn't available and give the general trend. Call these "the transiting Moon", never just "Moon in <sign>", so they aren't confused with the natal Moon.
 - Distinguish frames of reference explicitly: birth chart (D1) vs divisional charts, and natal positions vs current transits.
 
 ANSWER FORMAT (Markdown)

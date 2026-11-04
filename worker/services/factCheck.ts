@@ -64,9 +64,12 @@ const S = Object.keys(SIGNS).join('|');
 const ORD = String.raw`(\d{1,2})(?:st|nd|rd|th)`;
 const ORD_LIST = String.raw`${ORD}(?:\s*(?:,|and|&|/)\s*(?:the\s+)?${ORD})?`;
 
-/** Sentences where another frame of reference makes different signs/houses correct. */
+/**
+ * Sentences where another frame of reference makes different signs/houses
+ * correct: transits (incl. day-by-day forecasts), the Moon chart, vargas.
+ */
 const OTHER_FRAME =
-  /\b(transit|transits|transiting|gochar|currently|right now|enters|entering|moves? into|will move|will be in|from the moon|from moon|chandra lagna|moon chart|navamsa|navamsha|d-?9|d-?10|dasamsa|d-?\d{1,2}\b|varga|chalit|from the sun|from venus|from jupiter|in the [a-z]+ chart|sade sati|panoti|dhaiya|ashtama shani)\b|→|->/i;
+  /\b(transit|transits|transiting|gochar|currently|right now|enters|entering|moves? into|will move|will be in|today|tonight|tomorrow|this week|next week|mon|tue|wed|thu|fri|sat|sun(?=\s*\d)|monday|tuesday|wednesday|thursday|friday|saturday|sunday|day \d|\d{4}-\d{2}-\d{2}|\d{1,2} (?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]* \d{1,2}|from the moon|from moon|chandra lagna|moon chart|navamsa|navamsha|d-?9|d-?10|dasamsa|d-?\d{1,2}\b|varga|chalit|from the sun|from venus|from jupiter|in the [a-z]+ chart|sade sati|panoti|dhaiya|ashtama shani)\b|→|->/i;
 
 /** Strip Markdown and normalise hyphen variants (models often use U+2011 "‑"). */
 const clean = (s: string) =>

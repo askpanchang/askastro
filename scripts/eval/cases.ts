@@ -342,4 +342,31 @@ export const CASES: Case[] = [
       { name: 'names the Moon sign', pass: mentions('aquarius') },
     ],
   },
+  {
+    id: 'arjun-week',
+    chart: 'arjun',
+    question: 'What are the predictions for this week, give day by day overview for next 7 days.',
+    checks: (k, nowSec) => {
+      const md = currentDasha(k, nowSec)?.md.lord;
+      return [
+        {
+          name: 'covers 7 days',
+          pass: (a) =>
+            new Set(
+              // "Wed 4 Nov" or "Wednesday"
+              norm(a)
+                .match(/\b(?:mon|tue|wed|thu|fri|sat|sun)(?:day|sday|nesday|rsday|urday)?\b/gi)
+                ?.map((d) => d.slice(0, 3).toLowerCase()),
+            ).size >= 7,
+        },
+        {
+          name: 'frames the Moon as transiting',
+          pass: has(/transit(ing)? moon|moon(['’]s)? transit|gochar/i),
+        },
+        ...(md
+          ? [{ name: `names the ${planetName(md)} mahadasha`, pass: mentions(planetName(md)) }]
+          : []),
+      ];
+    },
+  },
 ];

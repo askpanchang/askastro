@@ -10,7 +10,10 @@ import { correctionNote, factCheck } from '../../worker/services/factCheck';
 import { detectTopics, topicLines } from '../../worker/services/topics';
 import {
   doubleTransitWindows,
+  signAt,
   signIntervals,
+  transitSignSets,
+  weekLines,
   type TransitSnapshot,
 } from '../../worker/services/transits';
 import arjun from '../fixtures/charts/arjun.json';
@@ -92,6 +95,55 @@ describe('transits', () => {
     // Scorpio Lagna: Jupiter in Leo = H10 aspects H2; Saturn in Pisces = H5 aspects H2 (10th).
     const w = doubleTransitWindows(snap, 8, 2);
     expect(w[0]).toEqual({ from: now, to: now + 80 * DAY });
+  });
+});
+
+describe('next 7 days', () => {
+  // Live AskPanchang data for 4–12 Nov 2026 (Lahiri).
+  const asOf = 1_793_793_600; // 2026-11-04 12:00 UTC
+  const snap: TransitSnapshot = {
+    asOfSec: asOf,
+    planets: [
+      { p: 2, r: 5, deg: 21, min: 9, retro: false }, // Moon Leo
+      { p: 3, r: 4, deg: 26, min: 8, retro: false }, // Mars Cancer
+      { p: 6, r: 7, deg: 0, min: 28, retro: true }, // Venus Libra
+    ],
+    events: [],
+    week: [
+      { p: 2, typ: 'rashi', dt: 1_793_851_486, from: 5, to: 6 },
+      { p: 6, typ: 'rashi', dt: 1_793_907_261, from: 7, to: 6 },
+      { p: 2, typ: 'rashi', dt: 1_794_051_920, from: 6, to: 7 },
+      { p: 2, typ: 'rashi', dt: 1_794_259_107, from: 7, to: 8 },
+      { p: 2, typ: 'rashi', dt: 1_794_473_356, from: 8, to: 9 },
+      { p: 3, typ: 'rashi', dt: 1_794_494_917, from: 4, to: 5 },
+    ],
+  };
+
+  it('gives the transiting Moon for each local day, with ingress times', () => {
+    const lines = weekLines(k, snap, 'Asia/Kolkata', asOf).filter(Boolean);
+    expect(lines[0]).toBe('## NEXT 7 DAYS (transiting Moon each day; times in Asia/Kolkata)');
+    const days = lines.slice(1, 8);
+    expect(days).toHaveLength(7);
+    // Scorpio Lagna, Taurus Moon: Leo = H10 / H4, Virgo = H11 / H5.
+    expect(days[0]).toBe('2026-11-04 Wed 4 Nov: Moon in Leo (H10 from Lagna, H4 from Moon)');
+    expect(days[1]).toBe(
+      '2026-11-05 Thu 5 Nov: Moon in Leo (H10 from Lagna, H4 from Moon); enters Virgo (H11 from Lagna, H5 from Moon) at 09:34',
+    );
+    expect(days[6]).toMatch(/^2026-11-10 Tue 10 Nov: Moon in Libra .*enters Scorpio .* at 02:48$/);
+    expect(lines.slice(8).join('\n')).toMatch(/Venus enters Virgo/);
+    expect(signAt(snap, 2, asOf - 12 * 3600)).toBe(5);
+    expect(signAt(snap, 2, 1_794_051_921)).toBe(7);
+  });
+
+  it('does not flag day-by-day Moon transits as natal errors', () => {
+    const answer = [
+      '**Thursday (5 Nov):** Moon in Virgo highlights gains.',
+      'Day 4: Moon in Libra, your 12th house.',
+      'Saturday – the Moon is in Libra, so rest.',
+    ].join('\n');
+    expect(factCheck(answer, k, transitSignSets(snap))).toEqual([]);
+    // A plain natal claim is still checked (Arjun's Moon is in Taurus).
+    expect(factCheck('Your Moon is in Virgo.', k, transitSignSets(null))).toHaveLength(1);
   });
 });
 
