@@ -68,6 +68,11 @@ async function setup(owner: string, profile: Record<string, unknown> = ARJUN) {
 }
 
 async function ask(owner: string, sessionId: string, question: string) {
+  if (!vi.isMockFunction(globalThis.fetch)) {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      async () => new Response('no', { status: 503 }),
+    );
+  }
   const res = await api(`/api/sessions/${sessionId}/messages`, {
     method: 'POST',
     owner,
@@ -129,7 +134,7 @@ describe('sessions', () => {
     expect(input.messages[0]?.content).toContain('Vedic (Jyotish) astrologer');
     expect(input.messages[0]?.content).toContain('CHART DATA:');
     expect(input.messages[0]?.content).toContain('Lagna (ascendant): Scorpio');
-    expect(input.messages[0]?.content).toContain('Answer in Hindi');
+    expect(input.messages[0]?.content).toContain('Answer in English');
     expect(input.messages[0]?.content).toMatch(/Today: \d{4}-\d{2}-\d{2}/);
     expect(input.messages[1]).toEqual({
       role: 'user',
@@ -193,6 +198,23 @@ describe('sessions', () => {
         await (await api(`/api/sessions/${session.id}`, { owner })).json(),
       );
       expect(d.messages.at(-1)).toMatchObject({ status: 'error', content: 'Jupiter is strong.' });
+    });
+  });
+
+  it('appends a chart-check note when the answer misstates a lordship', async () => {
+    const owner = freshOwner();
+    const { session } = await setup(owner);
+    mockAi(() => modelStream(['Venus, lord of the 2nd, ', 'brings wealth.']));
+    const { events } = await ask(owner, session.id, 'Money?');
+    expect(events.at(-1)?.event).toBe('done');
+    await vi.waitFor(async () => {
+      const d = SessionDetailSchema.parse(
+        await (await api(`/api/sessions/${session.id}`, { owner })).json(),
+      );
+      expect(d.messages.at(-1)?.content).toContain('**Chart check:**');
+      expect(d.messages.at(-1)?.content).toContain(
+        'Venus rules the 7th and 12th houses, not the 2nd.',
+      );
     });
   });
 

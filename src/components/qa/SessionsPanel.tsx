@@ -1,12 +1,10 @@
 import { ChatsCircle, Plus } from '@phosphor-icons/react';
-import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { LANG_LABELS, LANGS } from '../../../shared/kundali';
 import type { KundaliSummary } from '../../../shared/profile';
 import { useCreateSession, useSessions } from '../../api/sessions';
 import { formatRelative } from '../../lib/format';
 import { useToast } from '../Toaster';
-import { Button, EmptyState, ErrorState, Spinner, inputClass } from '../ui';
+import { Button, EmptyState, ErrorState, Spinner } from '../ui';
 
 export function SessionsPanel({
   profileId,
@@ -19,11 +17,10 @@ export function SessionsPanel({
   const create = useCreateSession(profileId);
   const navigate = useNavigate();
   const toast = useToast();
-  const [lang, setLang] = useState<string>(latestKundali?.lang ?? 'en');
 
   const start = () =>
     create.mutate(
-      { lang },
+      { lang: 'en' },
       {
         onSuccess: (s) => navigate(`/sessions/${s.id}`),
         onError: (e) => toast.error(e.message),
@@ -32,23 +29,6 @@ export function SessionsPanel({
 
   const newSession = latestKundali ? (
     <div className="flex flex-wrap items-end gap-2">
-      <div className="space-y-1">
-        <label htmlFor="session-lang" className="block text-xs font-medium text-muted">
-          Answer language
-        </label>
-        <select
-          id="session-lang"
-          className={`${inputClass} w-auto`}
-          value={lang}
-          onChange={(e) => setLang(e.target.value)}
-        >
-          {LANGS.map((l) => (
-            <option key={l} value={l}>
-              {LANG_LABELS[l]}
-            </option>
-          ))}
-        </select>
-      </div>
       <Button onClick={start} loading={create.isPending}>
         <Plus size={16} weight="bold" aria-hidden />
         New session
@@ -88,7 +68,7 @@ export function SessionsPanel({
               <span className="font-semibold">{s.title}</span>
               <span className="text-sm text-muted">
                 {s.messageCount} {s.messageCount === 1 ? 'message' : 'messages'} ·{' '}
-                {LANG_LABELS[s.lang]} · {formatRelative(s.updatedAt)}
+                {formatRelative(s.updatedAt)}
               </span>
             </Link>
           </li>

@@ -13,6 +13,7 @@ export const NEURON_RATES: Readonly<Record<string, { in: number; out: number }>>
   '@cf/nvidia/nemotron-3-120b-a12b': { in: 45_455, out: 136_364 },
   '@cf/google/gemma-4-26b-a4b-it': { in: 9_091, out: 27_273 },
   '@cf/moonshotai/kimi-k2.6': { in: 86_364, out: 363_636 },
+  '@cf/zai-org/glm-5.3-flash': { in: 13_636, out: 45_455 },
 };
 
 /** Estimated neurons for one answer. Unknown models use gpt-oss-120b rates; the dev echo model is free. */

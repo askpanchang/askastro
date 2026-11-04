@@ -26,9 +26,11 @@
     "ASKPANCHANG_API_BASE": "https://askpanchang-api-edge.askpanchang.workers.dev",
     // Header used for the optional ASKPANCHANG_API_KEY secret.
     "ASKPANCHANG_API_KEY_HEADER": "x-api-key",
-    // Provisional; verify against the current Workers AI catalog (see CLAUDE.md).
-    "AI_MODEL": "@cf/openai/gpt-oss-120b",
-    "AI_GATEWAY_ID": "",
+    // Chosen by `npm run eval` (Nov 2026): 33/33 facts, 0 fact errors, ~356
+    // neurons and ~19 s per answer. Needs AI Gateway credits (Unified billing).
+    "AI_MODEL": "@cf/deepseek-ai/deepseek-v4.1-flash-1017",
+    // AI Gateway with Workers AI billing set to Unified billing (prepaid credits).
+    "AI_GATEWAY_ID": "kundali-studio",
     // Cloudflare Access team domain (JWT issuer). The application audience,
     // ACCESS_AUD, is a production-only secret: without it (local dev, tests)
     // the owner comes from the Cf-Access-Authenticated-User-Email header.

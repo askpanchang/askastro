@@ -103,7 +103,7 @@ export async function insertSession(
 export async function updateSession(
   db: D1Database,
   id: string,
-  v: { title?: string; lang?: string },
+  v: { title?: string; lang?: string; model?: string },
 ) {
   const sets: string[] = [];
   const binds: unknown[] = [];
@@ -114,6 +114,10 @@ export async function updateSession(
   if (v.lang !== undefined) {
     sets.push('lang = ?');
     binds.push(v.lang);
+  }
+  if (v.model !== undefined) {
+    sets.push('model = ?');
+    binds.push(v.model);
   }
   sets.push('updated_at = ?');
   binds.push(nowIso());
