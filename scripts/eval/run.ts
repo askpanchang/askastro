@@ -14,6 +14,7 @@ import { modelSettings } from '../../shared/models';
 import { AskPanchangKundaliSchema } from '../../shared/kundali';
 import { neuronsFor } from '../../shared/usage';
 import { factCheckPeople } from '../../worker/services/factCheck';
+import { splitFollowups } from '../../worker/services/followups';
 import { parseModelStream } from '../../worker/services/llm';
 import { buildPrompt } from '../../worker/services/prompts';
 import { detectHorizon, fetchPeriodEvents } from '../../worker/services/periods';
@@ -56,6 +57,8 @@ type Result = {
   neurons: number;
   seconds: number;
   answer: string;
+  /** Suggested next questions from the <<<FOLLOWUPS block (not part of `answer`). */
+  followups?: string[];
 };
 
 async function ask(model: string, messages: { role: string; content: string }[]) {
@@ -207,7 +210,8 @@ async function main() {
       });
       try {
         const a = await ask(model, messages);
-        const { checks, failed, found } = grade(c, people, a.text, transits, periodEvents);
+        const { visible, followups } = splitFollowups(a.text);
+        const { checks, failed, found } = grade(c, people, visible, transits, periodEvents);
         const issues = found.map((i) => i.correction);
         results.push({
           model,
@@ -219,11 +223,12 @@ async function main() {
           issues,
           neurons: neuronsFor(model, a.tin, a.tout),
           seconds: a.seconds,
-          answer: a.text,
+          answer: visible,
+          followups,
         });
         console.log(
           `${modelSettings(model).label.padEnd(20)} ${c.id.padEnd(16)} ${checks.length - failed.length}/${checks.length}` +
-            `${issues.length ? `  ✗ ${issues.length} fact error(s)` : ''}  ${Math.round(neuronsFor(model, a.tin, a.tout))} neurons  ${a.seconds.toFixed(0)}s`,
+            `${issues.length ? `  ✗ ${issues.length} fact error(s)` : ''}  ${Math.round(neuronsFor(model, a.tin, a.tout))} neurons  ${a.seconds.toFixed(0)}s  ${followups.length} follow-ups`,
         );
       } catch (err) {
         console.log(`${model} ${c.id}: FAILED ${(err as Error).message}`);
@@ -237,8 +242,8 @@ async function main() {
 function report(results: Result[], models: string[]) {
   // Summary per model
   const lines = [
-    '| Model | Facts passed | Fact errors | Avg neurons | Avg seconds |',
-    '|---|---|---|---|---|',
+    '| Model | Facts passed | Fact errors | Avg neurons | Avg seconds | 3 follow-ups |',
+    '|---|---|---|---|---|---|',
   ];
   for (const model of models) {
     const r = results.filter((x) => x.model === model);
@@ -246,7 +251,7 @@ function report(results: Result[], models: string[]) {
     const passed = r.reduce((n, x) => n + x.passed, 0);
     const total = r.reduce((n, x) => n + x.total, 0);
     lines.push(
-      `| ${modelSettings(model).label} | ${passed}/${total} (${Math.round((100 * passed) / total)}%) | ${r.reduce((n, x) => n + x.errors, 0)} | ${Math.round(r.reduce((n, x) => n + x.neurons, 0) / r.length)} | ${(r.reduce((n, x) => n + x.seconds, 0) / r.length).toFixed(0)} |`,
+      `| ${modelSettings(model).label} | ${passed}/${total} (${Math.round((100 * passed) / total)}%) | ${r.reduce((n, x) => n + x.errors, 0)} | ${Math.round(r.reduce((n, x) => n + x.neurons, 0) / r.length)} | ${(r.reduce((n, x) => n + x.seconds, 0) / r.length).toFixed(0)} | ${r.filter((x) => x.followups?.length === 3).length}/${r.length} |`,
     );
   }
   const details = results

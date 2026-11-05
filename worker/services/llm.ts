@@ -169,6 +169,10 @@ export class DevEchoLlm implements LlmClient {
       `- ${pick(/Current: [^\n]*/)}`,
       '',
       `_Context sent: ${messages.length} messages, about ${Math.round(system.length / 3)} tokens of instructions and chart data._`,
+      '<<<FOLLOWUPS',
+      '- What does my current dasha indicate?',
+      '- Which planets are strongest?',
+      '- What about career?',
     ].join('\n');
     const words = answer.split(/(?<=\s)/);
     for (const w of words) {
