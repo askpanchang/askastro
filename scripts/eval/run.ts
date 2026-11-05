@@ -13,13 +13,12 @@ import { join } from 'node:path';
 import { modelSettings } from '../../shared/models';
 import { AskPanchangKundaliSchema } from '../../shared/kundali';
 import { neuronsFor } from '../../shared/usage';
-import { buildChartDigest } from '../../worker/services/chartDigest';
-import { factCheck } from '../../worker/services/factCheck';
+import { factCheckPeople } from '../../worker/services/factCheck';
 import { parseModelStream } from '../../worker/services/llm';
 import { buildPrompt } from '../../worker/services/prompts';
-import { detectTopics, topicLines } from '../../worker/services/topics';
-import { detectHorizon, fetchPeriodEvents, periodLines } from '../../worker/services/periods';
-import { fetchTransits, transitSignSets } from '../../worker/services/transits';
+import { detectHorizon, fetchPeriodEvents } from '../../worker/services/periods';
+import { checkedPeople, questionContext, type Person } from '../../worker/services/questionContext';
+import { fetchTransits, transitSignSets, type TransitEvent } from '../../worker/services/transits';
 import { CASES, CHARTS } from './cases';
 
 const arg = (name: string, fallback?: string) => {
@@ -102,6 +101,52 @@ function loadChart(meta: (typeof CHARTS)[string]) {
   );
 }
 
+type CaseT = (typeof CASES)[number];
+
+function personOf(meta: (typeof CHARTS)[string]): Person {
+  return {
+    k: loadChart(meta),
+    timeUncertain: meta.timeUncertain,
+    bd: {
+      nm: meta.name,
+      g: meta.gender,
+      dob: meta.dob,
+      tob: meta.tob ?? '12:00',
+      tz: meta.tz,
+      lat: meta.lat,
+      lon: meta.lon,
+      loc: meta.place,
+    },
+  };
+}
+
+function casePeople(c: CaseT): [Person] | [Person, Person] {
+  const p1 = personOf(CHARTS[c.chart]!);
+  return c.partner ? [p1, personOf(CHARTS[c.partner.chart]!)] : [p1];
+}
+
+/** Grade one answer: expected facts plus the (two-person aware) fact-checker. */
+function grade(
+  c: CaseT,
+  people: Person[],
+  answer: string,
+  transits: Awaited<ReturnType<typeof fetchTransits>>,
+  periodEvents: TransitEvent[] | null,
+) {
+  const checks = c.checks(people[0]!.k, nowSec, people[1]?.k);
+  const failed = checks.filter((ch) => !ch.pass(answer)).map((ch) => ch.name);
+  const found = factCheckPeople(
+    answer,
+    checkedPeople(people),
+    transitSignSets(transits, periodEvents ?? []),
+    {
+      events: [...(transits?.events ?? []), ...(transits?.week ?? []), ...(periodEvents ?? [])],
+      tz: people[0]!.bd.tz,
+    },
+  );
+  return { checks, failed, found };
+}
+
 /** Re-score saved answers with the current grader and fact-checker (no model calls). */
 async function regrade(file: string, transits: Awaited<ReturnType<typeof fetchTransits>>) {
   const saved = JSON.parse(readFileSync(file, 'utf8')) as Result[];
@@ -112,16 +157,9 @@ async function regrade(file: string, transits: Awaited<ReturnType<typeof fetchTr
       out.push(r);
       continue;
     }
-    const meta = CHARTS[c.chart]!;
-    const k = loadChart(meta);
-    const checks = c.checks(k, nowSec);
-    const failed = checks.filter((ch) => !ch.pass(r.answer)).map((ch) => ch.name);
     const horizon = detectHorizon(c.question);
     const periodEvents = horizon ? await fetchPeriodEvents(env as Env, nowSec, horizon) : null;
-    const found = factCheck(r.answer, k, transitSignSets(transits, periodEvents ?? []), {
-      events: [...(transits?.events ?? []), ...(transits?.week ?? []), ...(periodEvents ?? [])],
-      tz: meta.tz,
-    });
+    const { checks, failed, found } = grade(c, casePeople(c), r.answer, transits, periodEvents);
     for (const f of found)
       console.log(`  ${modelSettings(r.model).label} / ${r.case}: "${f.claim}" → ${f.correction}`);
     out.push({
@@ -151,54 +189,26 @@ async function main() {
 
   for (const model of models) {
     for (const c of CASES.filter((x) => !only || only.includes(x.id))) {
-      const meta = CHARTS[c.chart]!;
-      const k = AskPanchangKundaliSchema.parse(
-        JSON.parse(readFileSync(join(fixtures, meta.file), 'utf8')),
-      );
-      const digest = buildChartDigest({
-        data: k,
-        timeUncertain: meta.timeUncertain,
-        asOfSec: nowSec,
+      const people = casePeople(c);
+      const { chartData, periodEvents } = await questionContext(env as Env, {
+        question: c.question,
+        nowSec,
         transits,
-        profile: {
-          name: meta.name,
-          gender: meta.gender,
-          dob: meta.dob,
-          tob: meta.tob,
-          tobUnknown: meta.timeUncertain,
-          place: meta.place,
-          tz: meta.tz,
-        },
+        people,
+        relation: c.partner?.relation,
       });
-      const horizon = detectHorizon(c.question);
-      const periodEvents = horizon ? await fetchPeriodEvents(env as Env, nowSec, horizon) : null;
-      const topicContext = [
-        ...topicLines(k, detectTopics(c.question), {
-          gender: meta.gender,
-          tz: meta.tz,
-          asOfSec: nowSec,
-          transits,
-        }),
-        ...(horizon
-          ? periodLines(k, horizon, { tz: meta.tz, nowSec, transits, events: periodEvents })
-          : []),
-      ].join('\n');
       const messages = buildPrompt({
-        digest,
+        digest: chartData,
+        twoPeople: people.length === 2,
         today: new Date(nowSec * 1000).toISOString().slice(0, 10),
-        timeUncertain: meta.timeUncertain,
+        timeUncertain: people.some((p) => p.timeUncertain),
         history: [],
         question: c.question,
-        topicContext,
       });
       try {
         const a = await ask(model, messages);
-        const checks = c.checks(k, nowSec);
-        const failed = checks.filter((ch) => !ch.pass(a.text)).map((ch) => ch.name);
-        const issues = factCheck(a.text, k, transitSignSets(transits, periodEvents ?? []), {
-          events: [...(transits?.events ?? []), ...(transits?.week ?? []), ...(periodEvents ?? [])],
-          tz: meta.tz,
-        }).map((i) => i.correction);
+        const { checks, failed, found } = grade(c, people, a.text, transits, periodEvents);
+        const issues = found.map((i) => i.correction);
         results.push({
           model,
           case: c.id,

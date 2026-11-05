@@ -1,7 +1,7 @@
 import type { ChatMessage } from './llm';
 
 /** Bump when the system prompt or context format changes; stored on each answer. */
-export const PROMPT_VERSION = '2026-11-04.3';
+export const PROMPT_VERSION = '2026-11-05.1';
 
 /** System prompt. Chat is English-only. */
 export function systemPrompt(): string {
@@ -36,6 +36,13 @@ LANGUAGE
 Answer in English.`;
 }
 
+const TWO_PEOPLE_RULES = `TWO PEOPLE
+- The data has two charts: PERSON 1 and PERSON 2, each with its own planets, lordships, dashas and transits. Never mix them up: check which person's section a placement comes from before citing it, and name the person every time ("Priya's Venus in the 7th", "Arjun's Saturn mahadasha").
+- Refer to both people by first name.
+- For compatibility, use the COMPATIBILITY section as computed (Guna Milan score, kootas, dosha comparisons). Don't recompute kootas. Explain what the strong and weak kootas mean in practice, and remember that Guna Milan is one input, alongside each chart's 7th house, Venus/Jupiter and the D9.
+- For timing, compare both people's dasha periods and point out windows that are good for both.
+- If there is no COMPATIBILITY section (not a couple), compare the relevant houses (e.g. the 4th/9th for a parent, the 5th for a child, the 3rd/11th for siblings and friends, the 7th/10th for business partners) and how each chart's planets fall in the other's houses only when the data shows it.`;
+
 /** Rough token estimate (≈3.6 characters per token for English; conservative for Indic scripts). */
 export const estimateTokens = (s: string) => Math.ceil(s.length / 3);
 
@@ -56,6 +63,8 @@ export function buildPrompt(args: {
   historyBudget?: number;
   /** Topic-focused context for this question (from topics.ts), if any. */
   topicContext?: string;
+  /** Two charts in the data (PERSON 1 / PERSON 2): adds the two-person rules. */
+  twoPeople?: boolean;
 }): ChatMessage[] {
   const budget = args.historyBudget ?? HISTORY_TOKEN_BUDGET;
   const kept: ChatMessage[] = [];
@@ -77,7 +86,7 @@ export function buildPrompt(args: {
     {
       role: 'system',
       content:
-        `${systemPrompt()}\n\n---\nCHART DATA:\n${args.digest}${args.topicContext ? `\n${args.topicContext}` : ''}\n\n` +
+        `${systemPrompt()}${args.twoPeople ? `\n\n${TWO_PEOPLE_RULES}` : ''}\n\n---\nCHART DATA:\n${args.digest}${args.topicContext ? `\n${args.topicContext}` : ''}\n\n` +
         `Today: ${args.today}\nTime-uncertain: ${args.timeUncertain ? 'yes' : 'no'}`,
     },
     ...kept,

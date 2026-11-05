@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { sseEvent } from '../../shared/sse';
 import fixture from '../fixtures/askpanchang-sample.json';
@@ -134,5 +134,75 @@ describe('session page', () => {
     // Rejected before storage: the question goes back into the box.
     expect(await screen.findByText('Wait for the current answer to finish.')).toBeInTheDocument();
     expect(box).toHaveValue('Career?');
+  });
+});
+
+describe('second person', () => {
+  it('adds a spouse and switches to couple starters', async () => {
+    const SPOUSE = {
+      ...PROFILE,
+      id: '44444444-4444-4444-8444-444444444444',
+      name: 'Priya Natarajan',
+      kundaliStatus: 'current',
+      lastSessionAt: null,
+      access: 'owner',
+      sharedBy: null,
+    };
+    let session: Record<string, unknown> = { ...SESSION, partner: null };
+    const fetch = mockApi({
+      [`GET /api/sessions/${SESSION.id}`]: () =>
+        Response.json({ session, messages: [], kundaliOutdated: false }),
+      [`GET /api/profiles/${PROFILE.id}`]: () =>
+        Response.json({ profile: PROFILE, latestKundali: null, access: 'owner', sharedBy: null }),
+      'GET /api/profiles': () =>
+        Response.json({
+          items: [
+            { ...SPOUSE, ...PROFILE, kundaliStatus: 'current' }, // the session's own profile: hidden
+            SPOUSE,
+          ],
+          nextCursor: null,
+        }),
+      [`PUT /api/sessions/${SESSION.id}/partner`]: (_u, init) => {
+        const body = JSON.parse(String(init.body)) as { profileId: string; relation: string };
+        session = {
+          ...SESSION,
+          partner: {
+            ...body,
+            kundaliId: '55555555-5555-4555-8555-555555555555',
+            name: SPOUSE.name,
+          },
+        };
+        return Response.json({ session });
+      },
+    });
+    renderApp(`/sessions/${SESSION.id}`);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Add a second person' }, { timeout: 5000 }),
+    );
+    const dialog = screen
+      .getAllByRole('dialog', { hidden: true })
+      .find((d) => within(d).queryByText('Use both charts'))!;
+    const person = within(dialog).getByLabelText('Person');
+    await waitFor(() =>
+      expect(
+        within(person).getByRole('option', { name: 'Priya Natarajan', hidden: true }),
+      ).toBeInTheDocument(),
+    );
+    // The chat's own profile isn't offered.
+    expect(within(person).getAllByRole('option', { hidden: true })).toHaveLength(2);
+    fireEvent.change(person, { target: { value: SPOUSE.id } });
+    fireEvent.change(within(dialog).getByLabelText(/Their relationship to/), {
+      target: { value: 'spouse' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Use both charts', hidden: true }));
+
+    expect(await screen.findByText('Priya Natarajan', { selector: 'strong' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'How compatible are we?' })).toBeInTheDocument();
+    const put = fetch.mock.calls.find(([, init]) => init?.method === 'PUT');
+    expect(JSON.parse(String(put?.[1]?.body))).toEqual({
+      profileId: SPOUSE.id,
+      relation: 'spouse',
+    });
   });
 });

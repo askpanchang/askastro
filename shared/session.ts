@@ -19,6 +19,56 @@ export const AskSchema = z.object({
     .max(2000, 'Questions can be at most 2000 characters'),
 });
 
+/** Person 2's relationship to Person 1 (the session's profile). */
+export const RELATIONS = [
+  'spouse',
+  'partner',
+  'parent',
+  'child',
+  'sibling',
+  'friend',
+  'business',
+] as const;
+
+/** Starters when a second person is in the session. */
+export const PAIR_STARTER_QUESTIONS = {
+  couple: [
+    'How compatible are we?',
+    'How will our married life be?',
+    'What should we watch out for as a couple?',
+    'Good periods for us in the next few years',
+  ],
+  other: [
+    'How do our charts relate to each other?',
+    'Where do we support each other, and where do we clash?',
+    'Good periods for us to work together',
+  ],
+} as const;
+export type Relation = (typeof RELATIONS)[number];
+export const RELATION_LABELS: Record<Relation, string> = {
+  spouse: 'Spouse',
+  partner: 'Partner (not married)',
+  parent: 'Parent',
+  child: 'Child',
+  sibling: 'Sibling',
+  friend: 'Friend',
+  business: 'Business partner',
+};
+/** Relations that get Ashtakoota (Guna Milan) matching. */
+export const isCouple = (r: Relation) => r === 'spouse' || r === 'partner';
+
+export const SessionPartnerSchema = z.object({
+  profileId: z.string(),
+  kundaliId: z.string(),
+  name: z.string(),
+  relation: z.enum(RELATIONS),
+});
+export type SessionPartner = z.infer<typeof SessionPartnerSchema>;
+export const SessionPartnerInputSchema = z.object({
+  profileId: z.string().min(1),
+  relation: z.enum(RELATIONS),
+});
+
 export const SessionSchema = z.object({
   id: z.string(),
   profileId: z.string(),
@@ -27,6 +77,8 @@ export const SessionSchema = z.object({
   model: z.string(),
   lang: z.enum(LANGS),
   messageCount: z.number(),
+  /** A second person whose chart is part of every answer (max two people). */
+  partner: SessionPartnerSchema.nullish(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

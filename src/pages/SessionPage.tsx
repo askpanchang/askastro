@@ -11,7 +11,13 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import { STARTER_QUESTIONS, type Message, type Session } from '../../shared/session';
+import {
+  PAIR_STARTER_QUESTIONS,
+  STARTER_QUESTIONS,
+  isCouple,
+  type Message,
+  type Session,
+} from '../../shared/session';
 import { ApiRequestError } from '../api/client';
 import { useKundali } from '../api/kundali';
 import { useProfile } from '../api/profiles';
@@ -27,6 +33,7 @@ import { BackLink } from '../components/BackLink';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { KundaliSummary } from '../components/kundali/KundaliSummary';
 import { Markdown } from '../components/qa/Markdown';
+import { PartnerBar } from '../components/qa/PartnerDialog';
 import { answerMeta } from '../lib/answerMeta';
 import { useToast } from '../components/Toaster';
 import { UsageLine, UsageMeters } from '../components/UsageMeter';
@@ -157,6 +164,11 @@ function SessionView({
           {profile.data?.profile.name ?? 'Profile'}
         </BackLink>
         <SessionHeader session={session} onOpenChart={() => setSheetOpen(true)} />
+        <PartnerBar
+          session={session}
+          ownerName={profile.data?.profile.name ?? 'this person'}
+          disabled={streaming}
+        />
 
         {kundaliOutdated && (
           <p
@@ -190,7 +202,10 @@ function SessionView({
           <div className="space-y-2">
             <p className="text-sm text-muted">Try one of these:</p>
             <div className="flex flex-wrap gap-2">
-              {STARTER_QUESTIONS.map((q) => (
+              {(session.partner
+                ? PAIR_STARTER_QUESTIONS[isCouple(session.partner.relation) ? 'couple' : 'other']
+                : STARTER_QUESTIONS
+              ).map((q) => (
                 <button
                   key={q}
                   type="button"

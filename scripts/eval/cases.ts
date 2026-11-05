@@ -1,6 +1,7 @@
 import { ordinal, planetName } from '../../shared/astro';
 import { allAntardashas, currentDasha } from '../../shared/dasha';
 import type { AskPanchangKundali } from '../../shared/kundali';
+import type { Relation } from '../../shared/session';
 import { lordOf } from '../../worker/services/chartFacts';
 
 /**
@@ -17,6 +18,8 @@ export type ChartMeta = {
   timeUncertain: boolean;
   place: string;
   tz: string;
+  lat: number;
+  lon: number;
 };
 
 export const CHARTS: Record<string, ChartMeta> = {
@@ -29,6 +32,8 @@ export const CHARTS: Record<string, ChartMeta> = {
     timeUncertain: false,
     place: 'Hyderabad, Telangana, India',
     tz: 'Asia/Kolkata',
+    lat: 17.385,
+    lon: 78.4867,
   },
   priya: {
     file: 'priya.json',
@@ -39,6 +44,8 @@ export const CHARTS: Record<string, ChartMeta> = {
     timeUncertain: false,
     place: 'Chennai, Tamil Nadu, India',
     tz: 'Asia/Kolkata',
+    lat: 13.0827,
+    lon: 80.2707,
   },
   ravi: {
     file: 'ravi-time-unknown.json',
@@ -49,6 +56,8 @@ export const CHARTS: Record<string, ChartMeta> = {
     timeUncertain: true,
     place: 'New Delhi, Delhi, India',
     tz: 'Asia/Kolkata',
+    lat: 28.6139,
+    lon: 77.209,
   },
 };
 
@@ -57,7 +66,9 @@ export type Case = {
   id: string;
   chart: keyof typeof CHARTS;
   question: string;
-  checks: (k: AskPanchangKundali, nowSec: number) => Check[];
+  /** A second person in the session (two-chart questions). */
+  partner?: { chart: keyof typeof CHARTS; relation: Relation };
+  checks: (k: AskPanchangKundali, nowSec: number, partner?: AskPanchangKundali) => Check[];
 };
 
 /** Normalise hyphen variants (models often write U+2011 "‑") before matching. */
@@ -409,6 +420,43 @@ export const CASES: Case[] = [
         pass: (a) => /saturn/i.test(a) && /jupiter/i.test(a),
       },
       { name: 'names dasha periods', pass: has(/antardasha|pratyantar|\bAD\b|\bPD\b/i) },
+    ],
+  },
+  {
+    id: 'couple-married',
+    chart: 'arjun',
+    partner: { chart: 'priya', relation: 'spouse' },
+    question: 'How will our married life be?',
+    checks: (k, _now, k2) => [
+      { name: 'names both people', pass: (a) => /arjun/i.test(a) && /priya/i.test(a) },
+      { name: 'uses the Guna Milan score', pass: has(/\b\d{1,2}(?:\.5)?\s*(?:\/|out of)\s*36\b/i) },
+      {
+        name: `states Arjun's 7th lord (${planetName(lordOf(k, 7))})`,
+        pass: statesLord(lordOf(k, 7), 7),
+      },
+      ...(k2
+        ? [
+            {
+              name: `states Priya's 7th lord (${planetName(lordOf(k2, 7))})`,
+              pass: statesLord(lordOf(k2, 7), 7),
+            },
+          ]
+        : []),
+      { name: 'mentions Manglik status', pass: has(/manglik|mangal dosha|kuja dosha/i) },
+    ],
+  },
+  {
+    id: 'pair-parent',
+    chart: 'arjun',
+    partner: { chart: 'ravi', relation: 'parent' },
+    question: 'How is my relationship with my father, and how do our charts relate?',
+    checks: () => [
+      { name: 'names both people', pass: (a) => /arjun/i.test(a) && /ravi/i.test(a) },
+      {
+        name: "flags Ravi's unknown birth time",
+        pass: has(/birth time|time of birth|uncertain|unknown/i),
+      },
+      { name: 'no Guna Milan for a parent', pass: (a) => !/\/\s*36\b|guna milan/i.test(a) },
     ],
   },
 ];
