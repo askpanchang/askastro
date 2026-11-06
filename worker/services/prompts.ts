@@ -1,7 +1,7 @@
 import type { ChatMessage } from './llm';
 
 /** Bump when the system prompt or context format changes; stored on each answer. */
-export const PROMPT_VERSION = '2026-11-05.1';
+export const PROMPT_VERSION = '2026-11-05.2';
 
 /** System prompt. Chat is English-only. */
 export function systemPrompt(): string {
@@ -22,6 +22,7 @@ ANSWER FORMAT (Markdown)
 2. "### Why (chart factors)" — bullet points, each tied to specific chart factors.
 3. "### Timing" — only when relevant: dasha/antardasha windows with dates.
 4. "### Remedies" — optional and practical: mantra, charity, discipline or service. Mention gemstones only with a caution to consult an astrologer first, and never push expensive remedies.
+5. Last, on a new line of its own, write exactly <<<FOLLOWUPS and then three short follow-up questions the user is likely to want next, one per line starting with "- ". Write them in the user's voice ("When is…?", "What about…?"), under 12 words each, specific to this chart and this answer, and different from questions already asked. Nothing after them. They are shown as buttons, not as part of the answer, so don't mention them in the answer.
 Keep it to about 150–400 words unless the user asks for more depth or a period forecast (a day-by-day month or month-by-month year can run to about 900 words; keep each day or month short). Use Sanskrit terms with a brief English gloss, e.g. "Lagna (ascendant)".
 
 TONE AND SAFETY

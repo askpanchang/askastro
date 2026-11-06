@@ -94,6 +94,8 @@ export const MessageSchema = z.object({
   /** Answers only: the model that wrote it and how long it took (ms). */
   model: z.string().nullish(),
   durationMs: z.number().nullish(),
+  /** Suggested next questions (answers only), shown as buttons under the latest answer. */
+  followups: z.array(z.string()).nullish(),
   createdAt: z.string(),
 });
 export type Message = z.infer<typeof MessageSchema>;

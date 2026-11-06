@@ -27,6 +27,7 @@ type MessageRow = {
   tokens_out: number | null;
   model: string | null;
   completed_at: string | null;
+  followups: string | null;
   created_at: string;
 };
 
@@ -68,8 +69,19 @@ const toMessage = (r: MessageRow): Message => ({
     r.role === 'assistant' && r.completed_at
       ? Math.max(0, Date.parse(r.completed_at) - Date.parse(r.created_at))
       : null,
+  followups: parseFollowupsJson(r.followups),
   createdAt: r.created_at,
 });
+
+function parseFollowupsJson(json: string | null): string[] {
+  if (!json) return [];
+  try {
+    const v: unknown = JSON.parse(json);
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
 
 const SESSION_SELECT = `SELECT s.id, s.profile_id, s.kundali_id, s.title, s.model, s.lang, s.created_at, s.updated_at,
   (SELECT COUNT(*) FROM qa_messages m WHERE m.session_id = s.id) AS message_count,
@@ -179,7 +191,7 @@ export async function softDeleteSession(db: D1Database, id: string) {
 export async function listMessages(db: D1Database, sessionId: string): Promise<Message[]> {
   const { results } = await db
     .prepare(
-      `SELECT id, role, content, status, tokens_in, tokens_out, model, completed_at, created_at FROM qa_messages
+      `SELECT id, role, content, status, tokens_in, tokens_out, model, completed_at, followups, created_at FROM qa_messages
        WHERE session_id = ? ORDER BY created_at, rowid`,
     )
     .bind(sessionId)
@@ -239,13 +251,22 @@ export async function finishAnswer(
     status: 'complete' | 'error';
     tokensIn: number | null;
     tokensOut: number | null;
+    followups?: string[];
   },
 ) {
   await db
     .prepare(
-      'UPDATE qa_messages SET content = ?, status = ?, tokens_in = ?, tokens_out = ?, completed_at = ? WHERE id = ?',
+      'UPDATE qa_messages SET content = ?, status = ?, tokens_in = ?, tokens_out = ?, completed_at = ?, followups = ? WHERE id = ?',
     )
-    .bind(v.content, v.status, v.tokensIn, v.tokensOut, nowIso(), id)
+    .bind(
+      v.content,
+      v.status,
+      v.tokensIn,
+      v.tokensOut,
+      nowIso(),
+      v.followups?.length ? JSON.stringify(v.followups) : null,
+      id,
+    )
     .run();
 }
 

@@ -252,7 +252,7 @@ export const CASES: Case[] = [
           /(only|can only) help|outside|not able to|can't help|cannot help|unrelated|astrology/i,
         ),
       },
-      { name: 'no code', pass: (a) => !/```|def |sorted\(/.test(a) },
+      { name: 'no code', pass: (a) => !/```|\bdef \w+\(|\bprint\(/.test(a) },
     ],
   },
   {

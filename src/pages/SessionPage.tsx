@@ -183,8 +183,16 @@ function SessionView({
 
         <h2 className="sr-only">Conversation</h2>
         <ol className="space-y-4" aria-label="Conversation">
-          {shown.map((m) => (
-            <MessageBubble key={m.id} message={m} />
+          {shown.map((m, i) => (
+            <MessageBubble
+              key={m.id}
+              message={m}
+              // Suggested next questions, under the latest answer only.
+              followups={
+                i === shown.length - 1 && !pending && !streaming ? (m.followups ?? []) : []
+              }
+              onAsk={(q) => void ask(q)}
+            />
           ))}
           {pending && (
             <>
@@ -365,9 +373,13 @@ function SessionHeader({ session, onOpenChart }: { session: Session; onOpenChart
 
 function MessageBubble({
   message,
+  followups = [],
+  onAsk,
 }: {
   message: Pick<Message, 'role' | 'content' | 'status'> &
     Partial<Pick<Message, 'model' | 'tokensIn' | 'tokensOut' | 'durationMs'>>;
+  followups?: string[];
+  onAsk?: (question: string) => void;
 }) {
   const toast = useToast();
   if (message.role === 'user') {
@@ -424,6 +436,23 @@ function MessageBubble({
               Copy
             </button>
           )}
+        </div>
+      )}
+      {followups.length > 0 && onAsk && (
+        <div className="mt-3 border-t border-border pt-3">
+          <p className="mb-2 text-xs font-medium text-muted">Ask next</p>
+          <div className="flex flex-wrap gap-2">
+            {followups.map((q) => (
+              <button
+                key={q}
+                type="button"
+                onClick={() => onAsk(q)}
+                className="rounded-full border border-border bg-surface px-3 py-1.5 text-left text-sm hover:border-saffron hover:bg-saffron-soft"
+              >
+                {q}
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </li>

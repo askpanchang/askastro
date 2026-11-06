@@ -35,6 +35,7 @@ import { enforceDailyAiLimit } from '../services/aiUsage';
 import { correctionNote, factCheckPeople } from '../services/factCheck';
 import { checkedPeople, questionContext, type Person } from '../services/questionContext';
 import { fetchTransits, transitSignSets } from '../services/transits';
+import { FollowupSplitter, splitFollowups } from '../services/followups';
 import { findDegeneration, type LlmClient } from '../services/llm';
 import { activeModel } from '../services/modelChoice';
 import { PROMPT_VERSION, buildPrompt, estimateTokens } from '../services/prompts';
@@ -256,6 +257,8 @@ export function sessionRoutes(llmFor: (env: Env, model: string) => LlmClient) {
 
         const work = (async () => {
           let text = '';
+          // The model ends with a <<<FOLLOWUPS block: stream and store only the answer.
+          const splitter = new FollowupSplitter();
           let tokensIn: number | null = null;
           let tokensOut: number | null = null;
           try {
@@ -275,27 +278,33 @@ export function sessionRoutes(llmFor: (env: Env, model: string) => LlmClient) {
               }
               if (ev.type === 'thinking') continue;
               if (ev.type === 'token') {
-                text += ev.text;
+                const visible = splitter.push(ev.text);
+                const raw = splitter.raw;
                 // Check the recent tail only, so long answers stay cheap to scan.
-                const tailStart = Math.max(0, text.length - ev.text.length - 400);
-                const bad = findDegeneration(text.slice(tailStart));
+                const tailStart = Math.max(0, raw.length - ev.text.length - 400);
+                const bad = findDegeneration(raw.slice(tailStart));
                 if (bad >= 0) {
-                  text = text.slice(0, tailStart + bad).trimEnd();
+                  text = splitFollowups(raw.slice(0, tailStart + bad)).visible.trimEnd();
                   throw new AppError(
                     502,
                     'AI_MALFORMED_ANSWER',
                     'The answer went off the rails and was stopped. Please ask again.',
                   );
                 }
-                await send('token', { text: ev.text });
+                text = splitter.visible;
+                if (visible) await send('token', { text: visible });
               } else {
                 // gpt-oss sends usage on most chunks (sometimes zeros); keep the largest.
                 tokensIn = Math.max(tokensIn ?? 0, ev.tokensIn);
                 tokensOut = Math.max(tokensOut ?? 0, ev.tokensOut);
               }
             }
+            const rest = stopped ? '' : splitter.flush();
+            if (rest) await send('token', { text: rest });
+            const { visible, followups } = splitter.result();
+            text = visible;
             tokensIn ??= messages.reduce((n, m) => n + estimateTokens(m.content), 0);
-            tokensOut ??= estimateTokens(text);
+            tokensOut ??= estimateTokens(splitter.raw);
             if (stopped) {
               await finishAnswer(db, assistantId, {
                 content: text.trim() ? text.trimEnd() + STOPPED_NOTE : '',
@@ -342,6 +351,7 @@ export function sessionRoutes(llmFor: (env: Env, model: string) => LlmClient) {
                 status: 'complete',
                 tokensIn,
                 tokensOut,
+                followups,
               });
               await send('done', { messageId: assistantId, tokensIn, tokensOut });
             }

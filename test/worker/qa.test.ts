@@ -310,6 +310,37 @@ describe('sessions', () => {
   });
 });
 
+describe('follow-up questions', () => {
+  it('streams and stores the answer without the follow-up block, and keeps the questions', async () => {
+    const owner = freshOwner();
+    const { session } = await setup(owner);
+    mockAi(() =>
+      modelStream([
+        'Jupiter favours growth.',
+        '\n<<<FOLL',
+        'OWUPS\n- When does it peak?',
+        '\n- What about career?',
+      ]),
+    );
+    const { events } = await ask(owner, session.id, 'What does my current dasha indicate?');
+    const streamed = events
+      .filter((e) => e.event === 'token')
+      .map((e) => e.data.text)
+      .join('');
+    expect(streamed).not.toContain('FOLLOWUPS');
+    expect(streamed.trim()).toBe('Jupiter favours growth.');
+
+    const d = SessionDetailSchema.parse(
+      await (await api(`/api/sessions/${session.id}`, { owner })).json(),
+    );
+    expect(d.messages[1]).toMatchObject({
+      content: 'Jupiter favours growth.',
+      followups: ['When does it peak?', 'What about career?'],
+    });
+    expect(d.messages[0]?.followups).toEqual([]);
+  });
+});
+
 describe('dropped connections and Stop', () => {
   const defaults = { ...streamTiming };
   afterEach(() => Object.assign(streamTiming, defaults));

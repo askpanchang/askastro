@@ -206,3 +206,33 @@ describe('second person', () => {
     });
   });
 });
+
+describe('follow-up questions', () => {
+  it('shows suggested questions under the latest answer and asks one', async () => {
+    const answer = {
+      ...msg('assistant', 'Jupiter brings growth.', 2),
+      followups: ['When does it peak?', 'What about career?'],
+    };
+    const fetch = mockApi({
+      [`GET /api/sessions/${SESSION.id}`]: () =>
+        Response.json({
+          session: SESSION,
+          messages: [msg('user', 'What does my current dasha indicate?', 1), answer],
+          kundaliOutdated: false,
+        }),
+      [`GET /api/profiles/${PROFILE.id}`]: () =>
+        Response.json({ profile: PROFILE, latestKundali: null, access: 'owner', sharedBy: null }),
+      [`POST /api/sessions/${SESSION.id}/messages`]: () =>
+        new Response(sseEvent('error', { code: 'X', message: 'nope' }), {
+          headers: { 'content-type': 'text/event-stream' },
+        }),
+    });
+    renderApp(`/sessions/${SESSION.id}`);
+    expect(await screen.findByText('Ask next', {}, { timeout: 5000 })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'What about career?' }));
+    await waitFor(() => {
+      const post = fetch.mock.calls.find(([, init]) => init?.method === 'POST');
+      expect(JSON.parse(String(post?.[1]?.body))).toEqual({ question: 'What about career?' });
+    });
+  });
+});
