@@ -1,4 +1,4 @@
-import type { Message, Session } from '../../shared/session';
+import type { Message, Relation, Session } from '../../shared/session';
 import { newId, nowIso } from '../lib/ids';
 
 type SessionRow = {
@@ -11,6 +11,11 @@ type SessionRow = {
   created_at: string;
   updated_at: string;
   message_count: number;
+  partner_profile_id: string | null;
+  partner_kundali_id: string | null;
+  partner_name: string | null;
+  partner_ok: number;
+  relation: string | null;
 };
 
 type MessageRow = {
@@ -33,6 +38,16 @@ const toSession = (r: SessionRow): Session => ({
   model: r.model,
   lang: r.lang,
   messageCount: r.message_count,
+  // The second person shows only while the session's owner can still read that profile.
+  partner:
+    r.partner_ok && r.partner_profile_id && r.partner_kundali_id && r.partner_name && r.relation
+      ? {
+          profileId: r.partner_profile_id,
+          kundaliId: r.partner_kundali_id,
+          name: r.partner_name,
+          relation: r.relation as Relation,
+        }
+      : null,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 });
@@ -57,8 +72,13 @@ const toMessage = (r: MessageRow): Message => ({
 });
 
 const SESSION_SELECT = `SELECT s.id, s.profile_id, s.kundali_id, s.title, s.model, s.lang, s.created_at, s.updated_at,
-  (SELECT COUNT(*) FROM qa_messages m WHERE m.session_id = s.id) AS message_count
-  FROM qa_sessions s JOIN profiles p ON p.id = s.profile_id`;
+  (SELECT COUNT(*) FROM qa_messages m WHERE m.session_id = s.id) AS message_count,
+  s.partner_profile_id, s.partner_kundali_id, s.relation, pp.name AS partner_name,
+  CASE WHEN pp.id IS NOT NULL AND pp.deleted_at IS NULL AND (pp.owner_id = s.owner_id OR EXISTS (
+    SELECT 1 FROM profile_shares sh2 WHERE sh2.profile_id = pp.id AND sh2.email = s.owner_id))
+  THEN 1 ELSE 0 END AS partner_ok
+  FROM qa_sessions s JOIN profiles p ON p.id = s.profile_id
+  LEFT JOIN profiles pp ON pp.id = s.partner_profile_id`;
 
 /**
  * A session is visible only to its creator, and only while they can still
@@ -109,6 +129,20 @@ export async function insertSession(
     .bind(id, v.ownerId, v.profileId, v.kundaliId, v.title, v.model, v.lang, now, now)
     .run();
   return id;
+}
+
+/** Set or clear the session's second person. */
+export async function setPartner(
+  db: D1Database,
+  id: string,
+  p: { profileId: string; kundaliId: string; relation: Relation } | null,
+) {
+  await db
+    .prepare(
+      'UPDATE qa_sessions SET partner_profile_id = ?, partner_kundali_id = ?, relation = ?, updated_at = ? WHERE id = ?',
+    )
+    .bind(p?.profileId ?? null, p?.kundaliId ?? null, p?.relation ?? null, nowIso(), id)
+    .run();
 }
 
 export async function updateSession(

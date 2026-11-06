@@ -1,0 +1,291 @@
+{
+  "score": 31.5,
+  "max": 36,
+  "grade": "uttam",
+  "gradeLabel": "Uttam Milan",
+  "verdict": "Good Guna score — traditionally a good match",
+  "rec": "recommended",
+  "a": {
+    "nm": "Arjun",
+    "r": 2,
+    "n": 4,
+    "pd": 4,
+    "dt": 650710800,
+    "loc": "Hyderabad",
+    "yoni": "Sarpa",
+    "gana": "Manushya",
+    "nadi": "Antya"
+  },
+  "b": {
+    "nm": "Priya",
+    "r": 11,
+    "n": 25,
+    "pd": 2,
+    "dt": 763433400,
+    "loc": "Chennai",
+    "yoni": "Simha",
+    "gana": "Manushya",
+    "nadi": "Adi"
+  },
+  "guna": [
+    {
+      "k": "varna",
+      "score": 1,
+      "max": 1,
+      "av": "Vaishya",
+      "bv": "Shudra",
+      "sig": "Spiritual evolution & ego compatibility",
+      "why": "Boy's varna is equal or higher.",
+      "st": 1,
+      "sl": "Full"
+    },
+    {
+      "k": "vashya",
+      "score": 1,
+      "max": 2,
+      "av": "Chatushpada",
+      "bv": "Manav",
+      "sig": "Mutual attraction & control",
+      "why": "Partial mutual attraction.",
+      "st": 0,
+      "sl": "Partial"
+    },
+    {
+      "k": "tara",
+      "score": 1.5,
+      "max": 3,
+      "av": "Rohini",
+      "bv": "Purva Bhadrapada",
+      "sig": "Health & well-being of couple",
+      "why": "Favourable in one direction only.",
+      "st": 0,
+      "sl": "Partial"
+    },
+    {
+      "k": "yoni",
+      "score": 2,
+      "max": 4,
+      "av": "Sarpa",
+      "bv": "Simha",
+      "sig": "Intimate compatibility & chemistry",
+      "why": "Neutral yonis (Sarpa vs Simha).",
+      "st": 0,
+      "sl": "Partial"
+    },
+    {
+      "k": "graha",
+      "score": 5,
+      "max": 5,
+      "av": "Venus",
+      "bv": "Saturn",
+      "sig": "Mental compatibility & friendship",
+      "why": "Moon lords (Venus & Saturn) are friends.",
+      "st": 1,
+      "sl": "Full",
+      "star": true
+    },
+    {
+      "k": "gana",
+      "score": 6,
+      "max": 6,
+      "av": "Manushya",
+      "bv": "Manushya",
+      "sig": "Temperament & nature match",
+      "why": "Same/compatible temperament (Manushya–Manushya).",
+      "st": 1,
+      "sl": "Full",
+      "star": true
+    },
+    {
+      "k": "bhakoot",
+      "score": 7,
+      "max": 7,
+      "av": "Vrishabha",
+      "bv": "Kumbha",
+      "sig": "Financial & family prosperity",
+      "why": "Auspicious Moon-sign pair (Vrishabha–Kumbha).",
+      "st": 1,
+      "sl": "Full",
+      "star": true
+    },
+    {
+      "k": "nadi",
+      "score": 8,
+      "max": 8,
+      "av": "Antya",
+      "bv": "Adi",
+      "sig": "Health & progeny compatibility",
+      "why": "Different Nadi (Antya vs Adi) — good for progeny.",
+      "st": 1,
+      "sl": "Full",
+      "star": true
+    }
+  ],
+  "nadiNote": null,
+  "dosha": [
+    {
+      "id": "manglik",
+      "title": "Manglik Dosha",
+      "alabel": "Boy (Arjun)",
+      "av": "Manglik (Mars 12th from Moon)",
+      "ac": "rose",
+      "blabel": "Girl (Priya)",
+      "bv": "Manglik (Mars 1st from Lagna)",
+      "bc": "rose",
+      "verdict": "✓ Both partners are Manglik — the dosha is mutually cancelled",
+      "vc": "green"
+    },
+    {
+      "id": "kaalsarp",
+      "title": "Kaal Sarp Dosha",
+      "alabel": "Boy (Arjun)",
+      "av": "Not Present",
+      "ac": "green",
+      "blabel": "Girl (Priya)",
+      "bv": "Not Present",
+      "bc": "green",
+      "verdict": "✓ No Kaal Sarp Dosha in either chart",
+      "vc": "green"
+    },
+    {
+      "id": "nadi",
+      "title": "Nadi Dosha",
+      "alabel": "Boy (Arjun)",
+      "av": "Antya Nadi",
+      "ac": "muted",
+      "blabel": "Girl (Priya)",
+      "bv": "Adi Nadi",
+      "bc": "muted",
+      "verdict": "✓ Different Nadi — no Nadi Dosha.",
+      "vc": "green"
+    },
+    {
+      "id": "sade_sati",
+      "title": "Shani Sade Sati",
+      "alabel": "Boy (Arjun)",
+      "av": "Not Active",
+      "ac": "green",
+      "blabel": "Girl (Priya)",
+      "bv": "Active · Setting phase (until Jun 2027)",
+      "bc": "rose",
+      "verdict": "⚠ Sade Sati active (eases by ~Jun 2027) — time the marriage carefully",
+      "vc": "amber"
+    },
+    {
+      "id": "bhakoot",
+      "title": "Bhakoot Dosha",
+      "alabel": "Boy's Rashi",
+      "av": "Vrishabha (♉)",
+      "ac": "",
+      "blabel": "Girl's Rashi",
+      "bv": "Kumbha (♒)",
+      "bc": "",
+      "verdict": "✓ No Bhakoot Dosha — the Rashi relationship is auspicious",
+      "vc": "green"
+    },
+    {
+      "id": "gana",
+      "title": "Gana Compatibility",
+      "alabel": "Boy",
+      "av": "Manushya Gana",
+      "ac": "",
+      "blabel": "Girl",
+      "bv": "Manushya Gana",
+      "bc": "",
+      "verdict": "✓ Manushya-Manushya — temperaments are well matched",
+      "vc": "teal"
+    }
+  ],
+  "planets": [
+    {
+      "id": "rashi",
+      "title": "Rashi Compatibility (Vrishabha–Kumbha)",
+      "pct": 100,
+      "grade": "High",
+      "txt": "4th–10th house relationship — supportive, duty-bound and stabilising."
+    },
+    {
+      "id": "jupiter",
+      "title": "Jupiter Compatibility",
+      "pct": 45,
+      "grade": "Moderate",
+      "txt": "Boy's Jupiter in Karka (exalted), girl's Jupiter in Tula — poorly aligned: shared values, wisdom and blessings."
+    },
+    {
+      "id": "saturn",
+      "title": "Saturn Compatibility",
+      "pct": 70,
+      "grade": "Good",
+      "txt": "Boy's Saturn in Dhanu, girl's Saturn in Kumbha (own sign) — moderately aligned: discipline, duty and lasting stability."
+    },
+    {
+      "id": "mars",
+      "title": "Mars Compatibility",
+      "pct": 45,
+      "grade": "Moderate",
+      "txt": "Boy's Mars in Mesha (own sign), girl's Mars in Kumbha — poorly aligned: drive, courage and passion."
+    }
+  ],
+  "life": [
+    {
+      "id": "emotional",
+      "label": "Emotional Bond",
+      "pct": 75,
+      "grade": "Good",
+      "txt": "A generally affectionate bond with minor friction."
+    },
+    {
+      "id": "financial",
+      "label": "Financial Prosperity",
+      "pct": 100,
+      "grade": "High",
+      "txt": "Full Bhakoot — strong financial prospects and family welfare after marriage."
+    },
+    {
+      "id": "children",
+      "label": "Children & Progeny",
+      "pct": 100,
+      "grade": "High",
+      "txt": "Different Nadi — favourable for healthy children."
+    },
+    {
+      "id": "mental",
+      "label": "Mental Compatibility",
+      "pct": 100,
+      "grade": "High",
+      "txt": "Mutually friendly Moon lords — they think alike and communicate well."
+    },
+    {
+      "id": "family",
+      "label": "Family Harmony",
+      "pct": 100,
+      "grade": "High",
+      "txt": "Manushya–Manushya temperaments align — a harmonious household."
+    },
+    {
+      "id": "health",
+      "label": "Health & Longevity",
+      "pct": 75,
+      "grade": "Good",
+      "txt": "Moderate shared health; minor care advised."
+    }
+  ],
+  "reco": [
+    {
+      "t": "This match scores 31.5 out of 36 points — classified as Uttam Milan. traditionally a good match."
+    },
+    {
+      "h": "Manglik Dosha:",
+      "t": "Mars affliction is present in one chart — perform the appropriate Mangal Shanti remedies and match the Manglik status carefully."
+    },
+    {
+      "h": "Shani Sade Sati:",
+      "t": "A partner is currently in Sade Sati (eases by ~Jun 2027). Consider scheduling the wedding after it, or choose an exceptionally auspicious Muhurta within a Sade Sati-neutral window."
+    },
+    {
+      "h": "Strengths of this match:",
+      "t": "Full marks in Graha Maitri, Bhakoot, Gana provide a strong foundational match."
+    }
+  ],
+  "disclaimer": "This Kundali matching is provided for general guidance based on classical Vedic astrology principles. Results are calculated using the Drik Siddhanta system. AskPanchang strongly recommends consulting a qualified and experienced Jyotishi or priest before making final marriage decisions. Astrological compatibility is one of many factors in a successful marriage."
+}

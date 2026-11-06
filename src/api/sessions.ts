@@ -9,6 +9,8 @@ import {
   SessionResponseSchema,
   StartEventSchema,
   TokenEventSchema,
+  type Relation,
+  type SessionDetail,
 } from '../../shared/session';
 import { SseParser } from '../../shared/sse';
 import { ApiRequestError, apiFetch } from './client';
@@ -76,6 +78,24 @@ export function useDeleteSession(profileId: string) {
         qc.invalidateQueries({ queryKey: sessionKeys.list(profileId) }),
         qc.invalidateQueries({ queryKey: profileKeys.all }),
       ]);
+    },
+  });
+}
+
+/** Add, change (`{ profileId, relation }`) or remove (`null`) the session's second person. */
+export function useSessionPartner(sessionId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { profileId: string; relation: Relation } | null) =>
+      apiFetch(`/api/sessions/${sessionId}/partner`, SessionResponseSchema, {
+        method: input ? 'PUT' : 'DELETE',
+        body: input ? JSON.stringify(input) : undefined,
+      }),
+    onSuccess: ({ session }) => {
+      qc.setQueryData<SessionDetail>(sessionKeys.detail(sessionId), (d) =>
+        d ? { ...d, session } : d,
+      );
+      return qc.invalidateQueries({ queryKey: ['sessions', 'list'] });
     },
   });
 }

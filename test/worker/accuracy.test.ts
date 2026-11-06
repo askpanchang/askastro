@@ -6,7 +6,8 @@ import {
   lordships,
   lordshipTags,
 } from '../../worker/services/chartFacts';
-import { correctionNote, factCheck } from '../../worker/services/factCheck';
+import { correctionNote, factCheck, factCheckPeople } from '../../worker/services/factCheck';
+import { matchLines, type MatchResult } from '../../worker/services/matchmaking';
 import { dashaInRange, detectHorizon, periodLines } from '../../worker/services/periods';
 import { detectTopics, topicLines } from '../../worker/services/topics';
 import {
@@ -18,6 +19,8 @@ import {
   type TransitSnapshot,
 } from '../../worker/services/transits';
 import arjun from '../fixtures/charts/arjun.json';
+import priyaChart from '../fixtures/charts/priya.json';
+import matchSample from '../fixtures/matchmaking-sample.json';
 
 const k = AskPanchangKundaliSchema.parse(arjun);
 const DAY = 86_400;
@@ -256,5 +259,57 @@ describe('topics', () => {
     expect(lines).toMatch(
       /Jupiter–Venus 2025-01-03 → 2027-09-04 \(Venus: 7th lord, significator\)/,
     );
+  });
+});
+
+describe('two charts', () => {
+  // Arjun: Scorpio Lagna (Venus rules 7 and 12). Priya: Aquarius Lagna (Venus rules 4 and 9).
+  const priya = AskPanchangKundaliSchema.parse(priyaChart);
+  const people = [
+    { k, name: 'Arjun', aliases: ['Arjun Sharma', 'Arjun'] },
+    { k: priya, name: 'Priya', aliases: ['Priya Natarajan', 'Priya'] },
+  ];
+
+  it('checks a sentence against the chart of the person it names', () => {
+    const issues = factCheckPeople(
+      "Priya's Venus, lord of the 7th and 12th, gives devotion.",
+      people,
+    );
+    expect(issues.map((i) => i.correction)).toEqual([
+      'Priya: Venus rules the 4th and 9th houses, not the 7th.',
+      'Priya: Venus rules the 4th and 9th houses, not the 12th.',
+    ]);
+    expect(factCheckPeople("Arjun's Venus, lord of the 7th and 12th, is warm.", people)).toEqual(
+      [],
+    );
+  });
+
+  it('uses the heading a line sits under', () => {
+    const answer = [
+      "### Arjun's chart",
+      '- Venus, lord of the 7th and 12th, sits in the 9th house.',
+      '**Priya:**',
+      '- Venus, lord of the 7th, is strong.',
+    ].join('\n');
+    expect(factCheckPeople(answer, people).map((i) => i.correction)).toEqual([
+      'Priya: Venus rules the 4th and 9th houses, not the 7th.',
+    ]);
+  });
+
+  it('flags an unattributed claim only when it is wrong for both charts', () => {
+    expect(factCheckPeople('Venus, lord of the 7th and 12th, matters here.', people)).toEqual([]);
+    const both = factCheckPeople('Venus, lord of the 5th, matters here.', people);
+    expect(both).toHaveLength(1);
+    expect(both[0]!.correction).toBe(
+      'Arjun: Venus rules the 7th and 12th houses, not the 5th. Priya: Venus rules the 4th and 9th houses, not the 5th.',
+    );
+    expect(correctionNote(both, 2)).toContain('not match these charts');
+  });
+
+  it('labels the Guna Milan with names', () => {
+    const text = matchLines(matchSample as MatchResult, 'Arjun', 'Priya').join('\n');
+    expect(text).toContain('Total: 31.5/36 (Uttam Milan)');
+    expect(text).toMatch(/^nadi: 8\/8 \(Arjun: Antya, Priya: Adi\)/m);
+    expect(text).not.toMatch(/\bBoy\b|\bGirl\b/);
   });
 });

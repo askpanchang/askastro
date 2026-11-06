@@ -134,9 +134,8 @@ export function factCheck(
       : `${planetName(p)} rules no house`;
   };
 
-  const sentences = clean(answer).split(/(?<=[.!?;])\s+|\n+|\s\|\s/);
-  for (const s of sentences) {
-    if (timing) checkIngressDates(s, timing);
+  if (timing) for (const i of ingressIssues(answer, timing)) add(i.claim, i.correction);
+  for (const s of splitSentences(answer)) {
     if (!s.trim() || OTHER_FRAME.test(s)) continue;
 
     // "Venus, lord of the 7th and 12th" / "Venus (lord of the 2nd)"
@@ -196,7 +195,28 @@ export function factCheck(
   }
   return issues;
 
-  function checkIngressDates(s: string, t: { events: TransitEvent[]; tz: string }) {
+  function checkLord(claim: string, planet: number, nums: (string | undefined)[]) {
+    if (planet === 8 || planet === 9) {
+      add(claim, `${planetName(planet)} rules no house in Parashari astrology.`);
+      return;
+    }
+    const owned = lords.get(planet) ?? [];
+    for (const n of nums) {
+      if (!n) continue;
+      const h = Number(n);
+      if (h >= 1 && h <= 12 && !owned.includes(h))
+        add(claim, `${lordsText(planet)}, not the ${ordinal(h)}.`);
+    }
+  }
+}
+
+/** Stated sign-change dates ("Sun enters Scorpio on 16 Dec") checked against the timeline. */
+export function ingressIssues(
+  answer: string,
+  t: { events: TransitEvent[]; tz: string },
+): FactIssue[] {
+  const out: FactIssue[] = [];
+  for (const s of splitSentences(answer)) {
     for (const m of s.matchAll(INGRESS)) {
       const planet = PLANETS[m[1]!.toLowerCase()]!;
       const to = SIGNS[m[2]!.toLowerCase()]!;
@@ -218,31 +238,89 @@ export function factCheck(
           const [y, mo, dd] = d.split('-').map(Number) as [number, number, number];
           return `${dd} ${MONTH_NAMES[mo - 1]} ${y}`;
         };
-        add(
-          m[0],
-          `${planetName(planet)} enters ${signName(to)} on ${[...new Set(dates)].map(fmt).join(' and ')}, not ${day} ${MONTH_NAMES[month]}.`,
-        );
+        out.push({
+          claim: m[0].trim().slice(0, 120),
+          correction: `${planetName(planet)} enters ${signName(to)} on ${[...new Set(dates)].map(fmt).join(' and ')}, not ${day} ${MONTH_NAMES[month]}.`,
+        });
       }
     }
   }
+  return out;
+}
 
-  function checkLord(claim: string, planet: number, nums: (string | undefined)[]) {
-    if (planet === 8 || planet === 9) {
-      add(claim, `${planetName(planet)} rules no house in Parashari astrology.`);
-      return;
+export const splitSentences = (answer: string) => clean(answer).split(/(?<=[.!?;])\s+|\n+|\s\|\s/);
+
+export type CheckedPerson = {
+  k: AskPanchangKundali;
+  /** Shown before each correction ("Priya: …"). */
+  name: string;
+  /** Words that tie a sentence to this person (their names). */
+  aliases: string[];
+};
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Two charts in one answer. A sentence that names exactly one person (or
+ * sits under a heading that does, e.g. "Arjun's chart") is checked against
+ * that person's chart; otherwise a claim is flagged only if it is wrong for
+ * every chart (it can't be told which one is meant). Relation words such as
+ * "father" are not used: answers use them generically ("the father's
+ * influence", "9th house of father").
+ */
+export function factCheckPeople(
+  answer: string,
+  people: CheckedPerson[],
+  transitSigns?: Map<number, Set<number>>,
+  timing?: { events: TransitEvent[]; tz: string },
+): FactIssue[] {
+  if (people.length === 1) return factCheck(answer, people[0]!.k, transitSigns, timing);
+  const issues = timing ? ingressIssues(answer, timing) : [];
+  const seen = new Set(issues.map((i) => i.correction));
+  const tests = people.map(
+    (p) => new RegExp(`\\b(?:${p.aliases.map(escapeRe).join('|')})\\b`, 'i'),
+  );
+  const namedIn = (t: string) => people.map((_, i) => i).filter((i) => tests[i]!.test(t));
+  const sentences: { s: string; context: number | null }[] = [];
+  let context: number | null = null;
+  for (const line of answer.split('\n')) {
+    // A heading ("## Arjun's chart", "**Priya:**") sets whose chart the lines below are about.
+    if (/^\s*(#{1,6}\s|\*\*[^*]+\*\*\s*:?\s*$)/.test(line)) {
+      const n = namedIn(line);
+      context = n.length === 1 ? n[0]! : null;
     }
-    const owned = lords.get(planet) ?? [];
-    for (const n of nums) {
-      if (!n) continue;
-      const h = Number(n);
-      if (h >= 1 && h <= 12 && !owned.includes(h))
-        add(claim, `${lordsText(planet)}, not the ${ordinal(h)}.`);
+    for (const s of splitSentences(line)) if (s.trim()) sentences.push({ s, context });
+  }
+  for (const { s, context: ctx } of sentences) {
+    const direct = namedIn(s);
+    const named = direct.length ? direct : ctx !== null ? [ctx] : [];
+    const per = people.map((p) => factCheck(s, p.k, transitSigns));
+    const found: FactIssue[] = [];
+    if (named.length === 1) {
+      const i = named[0]!;
+      for (const x of per[i]!)
+        found.push({ ...x, correction: `${people[i]!.name}: ${x.correction}` });
+    } else {
+      for (const x of per[0]!) {
+        const all = per.map((list) => list.find((y) => y.claim === x.claim));
+        if (all.every(Boolean))
+          found.push({
+            claim: x.claim,
+            correction: all.map((y, i) => `${people[i]!.name}: ${y!.correction}`).join(' '),
+          });
+      }
+    }
+    for (const f of found) {
+      if (seen.has(f.correction)) continue;
+      seen.add(f.correction);
+      issues.push(f);
     }
   }
+  return issues;
 }
 
 /** Markdown note appended to an answer when the check finds mistakes. */
-export function correctionNote(issues: FactIssue[]): string {
+export function correctionNote(issues: FactIssue[], charts = 1): string {
   if (!issues.length) return '';
-  return `\n\n---\n**Chart check:** ${issues.length === 1 ? 'one statement above does' : 'some statements above do'} not match this chart. ${issues.map((i) => i.correction).join(' ')}`;
+  return `\n\n---\n**Chart check:** ${issues.length === 1 ? 'one statement above does' : 'some statements above do'} not match ${charts > 1 ? 'these charts' : 'this chart'}. ${issues.map((i) => i.correction).join(' ')}`;
 }
